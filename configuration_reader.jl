@@ -1,5 +1,5 @@
 #__precompile__()
-module ConfiguraionReader
+module ConfigurationReader
 
 import Base.read
 import Base.eof
@@ -62,14 +62,14 @@ function read_configuration(istream::IO)
   return header,data
 end
 
-function snapshot_reader(istream::IO)
+function snapshot_reader(ch::Channel, istream::IO)
   time_header = readline(istream)
   split_on_time_header(line) = length(line) >= 4 && "time" == line[1:4]
   while !eof(istream)
     splitted_istream = SplitInput(istream, split_on_time_header)
     data_header, data = read_configuration(splitted_istream)
     timestamp = parse_timestamp_header(time_header)
-    produce(timestamp,data_header,data)
+    put!(ch, (timestamp,data_header,data))
     time_header = lookup(splitted_istream)
   end
 end

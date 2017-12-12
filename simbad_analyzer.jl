@@ -1,11 +1,23 @@
-include("./configuration_reader.jl")
-using ConfiguraionReader
-using PyPlot
+include("./produce_configurations.jl")
 
-if length(ARGS) < 1
-  error("not enought arguments")
-end
-property_names = ARGS
+using PyPlot
+using TomekUtils
+using StatsBase
+
+#if length(ARGS) < 1
+#  error("not enought arguments")
+#end
+property_names = [
+  "birth.efficiency",
+  "birth.resistance",
+  "lifespan.efficiency",
+  "lifespan.resistance",
+  "success.efficiency",
+  "success.resistance"
+  ]
+
+mutation_name = "mutation.id"
+
 #min_val::Float64
 #max_val::Float64
 #resolution::Int64
@@ -28,43 +40,85 @@ resolution = Int64(100)
 
 println(STDERR,"processing properties $property_names")
 
-plot_time = Array{Float64,1}()
-plot_data = Array{Float64,1}()
+plot_time = Vector{Float64}()
+plot_data = Vector{Float64}()
 
-for (timestamp, data_header, data) in @async snapshot_reader(STDIN)
-  println(STDERR, "read snapshot t=$timestamp, $(size(data)[1]) entries")
-  
-  property_indices = [ findfirst(data_header,property_name) for property_name in property_names]
-  if countnz(property_indices) != length(property_indices)
-    idx2 = findfirst(property_indices, 0)
-    error("could not find property $(property_names[idx2]) in data header: $data_header")
-  end
-  property_cols = data[:,property_indices]
-  data = 0
-  
-  edges = linspace(min_val,max_val,resolution+1)
-  edges,counts = hist(property_cols, edges)
-  property_cols = 0
-  
-  normalized_counts = counts ./ sum(counts,1)
-  counts = 0
+mutation_data = Vector{ Any }()
+max_mutation = 0
+edges = linspace(min_val,max_val,resolution+1)
 
+all_property_names = vcat(property_names,mutation_name)
+
+
+
+#for (timestamp, data_header, data) in @async snapshot_reader(STDIN)
+for (timestamp, configuration) in Channel( (ch)->produce_configurations(ch, STDIN, all_property_names) )
+  println(STDERR, "read snapshot t=$timestamp, $(size(configuration)) records")
+  
   push!(plot_time, timestamp)
-  append!(plot_data, normalized_counts[:] )
+
+  for (index,property_name) in enumerate(property_names)
+    column = configuration[:,index]
+
+    histogram = fit(Histogram, column, edges, closed=:left)
+    counts = histogram.weights
+    normalized_counts = counts ./ sum(counts)
+    
+    append!(plot_data, normalized_counts )
+  end
+  
+  mutation_index = length(property_names) + 1
+  mutation_column = configuration[:,mutation_index]
+  vals, counts = countuniquesorted(mutation_column)
+  push!( mutation_data, (vals,counts) )
+
+  
+  
 end
 
 nprops = length(property_names)
 ntimes= length(plot_time)
 new_dims = (resolution, nprops, ntimes)
 plot_data = reshape(plot_data, new_dims)
-
+println(STDERR,"Plotting...")
 i = 1
-for property_name in property_names
-  fig = figure(figsize=(20,10), dpi=300)
-  data =  reshape(plot_data[:,i,:], (resolution,ntimes) )
-  stackplot(plot_time, data)
-  xlabel("time")
-  ylabel("cell count")
-  savefig("$property_name.png", dpi=300)
-  i += 1
+#for property_name in property_names
+#  println(STDERR, "property $property_name")
+#  fig = figure(figsize=(20,10), dpi=300)
+#  data =  reshape(plot_data[:,i,:], (resolution,ntimes) )
+#  stackplot(plot_time, data)
+#  xlabel("time")
+#  ylabel("cell count")
+#  savefig("$property_name.png", dpi=300)
+#  i += 1
+#end
+
+println(STDERR, "Mutations..")
+all_mutations = mapreduce( (x)->x[1], union, mutation_data )
+assert(issorted(all_mutations))
+nmutations = length(all_mutations)
+println(STDERR, "Detected $nmutations different, trying to allocate plot data")
+
+mutation_plot_data = Matrix{Float64}( nmutations, ntimes)
+
+println(STDERR, "Processing mutations...")
+for (time_idx,(vals,counts)) in enumerate(mutation_data)
+  indices = [findfirst(all_mutations,val) for val in vals]
+  mutation_plot_data[indices, time_idx] = counts / sum(counts)
 end
+println(STDERR, "Plotting")
+fig = figure(figsize=(20,10), dpi=300)
+stackplot(plot_time, mutation_plot_data)
+xlabel("time")
+ylabel("mutation prevalence")
+savefig("mutations.png", dpi=300)
+
+
+
+
+
+
+
+
+
+
