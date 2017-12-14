@@ -82,16 +82,16 @@ new_dims = (resolution, nprops, ntimes)
 plot_data = reshape(plot_data, new_dims)
 println(STDERR,"Plotting...")
 i = 1
-#for property_name in property_names
-#  println(STDERR, "property $property_name")
-#  fig = figure(figsize=(20,10), dpi=300)
-#  data =  reshape(plot_data[:,i,:], (resolution,ntimes) )
-#  stackplot(plot_time, data)
-#  xlabel("time")
-#  ylabel("cell count")
-#  savefig("$property_name.png", dpi=300)
-#  i += 1
-#end
+for property_name in property_names
+   println(STDERR, "property $property_name")
+  fig = figure(figsize=(20,10), dpi=300)
+  data =  reshape(plot_data[:,i,:], (resolution,ntimes) )
+  stackplot(plot_time, data)
+  xlabel("time")
+  ylabel("cell count")
+  savefig("$property_name.png", dpi=300)
+  i += 1
+end
 
 println(STDERR, "Mutations..")
 all_mutations = mapreduce( (x)->x[1], union, mutation_data )
