@@ -73,11 +73,46 @@ object Analyzer {
       option("mode","DROPMALFORMED").
       schema(chronicleSchema).
       load(pathPrefix + "/chronicles.csv.gz").
-      as[ChronicleLine];
+      as[ChronicleLine].
+      persist(StorageLevel.DISK_ONLY);
     
     val maxTime = chronicles.agg( max("birth_time") ).collect()(0).getDouble(0);  
     
     println("MAX TIME %s".format(maxTime))   ;
+    
+    val uglyTree =  chronicles.
+      select("id", "parent_id", "mutation_id").alias("children").
+        join(chronicles.select("id","mutation_id").alias("parents"), $"children.parent_id"===$"parents.id", "left" )
+
+    val tree = uglyTree.map( r => (
+      r.getLong(0),
+      r.getLong(2),
+      if (r.isNullAt(3)) 0 else r.getLong(3),
+      if (r.isNullAt(4)) 0 else r.getLong(4)
+    )).
+      withColumnRenamed("_1", "id").
+      withColumnRenamed("_2", "mutation").
+      withColumnRenamed("_3","parent").
+      withColumnRenamed("_4","parent_mutation")
+
+
+    val mutationTree = 
+      tree.filter( $"mutation" =!= $"parent_mutation").
+      dropDuplicates("mutation").
+      withColumnRenamed("id","first_particle_id").
+      withColumnRenamed("parent_id","first_particle_parent")
+
+
+    mutationTree.
+      sort("mutation").
+      select("mutation", "parent_mutation").
+      write.
+      format("csv").
+      option("delimiter",";").
+      option("header", "true").
+      mode("overwrite").
+      save(pathPrefix + "/mutation_tree/");
+    
     
     //val chroniclesPath = prefixPath + "/chronicles.csv.gz"
     //val textFile = sc.textFile(chroniclesPath, 4).cache()
