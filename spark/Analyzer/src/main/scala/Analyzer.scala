@@ -1,7 +1,10 @@
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
 import org.apache.spark.SparkConf
+import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.types._
+import org.apache.spark.sql.functions.max
+
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.sql.SaveMode
 //    import org.apache.spark.sql.Row
@@ -46,16 +49,21 @@ object Analyzer {
   def main(args: Array[String]) {
     
     if( args.length != 1 )
-      throw new RuntimeException("no prefix path given")
+      throw new RuntimeException("no prefix path given");
     
-    args.foreach( println )
-    val pathPrefix = args(0)
+    args.foreach( println );
+    val pathPrefix = args(0);
  
  
-    val conf = new SparkConf().setAppName("SimBaD analyzer")
-    val sc = new SparkContext(conf)
- 
-    val chronicles = sc.
+    val conf = new SparkConf().setAppName("SimBaD analyzer");
+    val sc = new SparkContext(conf);
+    val sqlContext = new SQLContext(sc);
+    val spark = sqlContext.sparkSession;
+    import spark.implicits._
+    
+    
+    
+    val chronicles = spark.
       read.
       format("csv").
       option("positiveInf", "inf").
@@ -69,7 +77,7 @@ object Analyzer {
     
     val maxTime = chronicles.agg( max("birth_time") ).collect()(0).getDouble(0);  
     
-    println("MAX TIME %s".format(maxTime))   
+    println("MAX TIME %s".format(maxTime))   ;
     
     //val chroniclesPath = prefixPath + "/chronicles.csv.gz"
     //val textFile = sc.textFile(chroniclesPath, 4).cache()
