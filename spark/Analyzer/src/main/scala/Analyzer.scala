@@ -70,7 +70,7 @@ object Analyzer {
       option("delimiter",";").
       option("mode","DROPMALFORMED").
       schema(chronicleSchema).
-      load(pathPrefix + "/chronicles.csv.gz").
+      load(pathPrefix).
       as[ChronicleLine].
       persist(StorageLevel.DISK_ONLY);
   }
