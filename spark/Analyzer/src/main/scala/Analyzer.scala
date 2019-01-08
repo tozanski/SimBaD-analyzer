@@ -182,20 +182,7 @@ object Analyzer {
 
     val maxTime =  getMaxTime(chronicles);    
     println("MAX TIME %s".format(maxTime));
-    
-    
-    val mutationTree = getMutationTree( spark, chronicles );
-    // save mutationTree
-    mutationTree.
-      sort("mutation").
-      select("mutation", "parent_mutation").
-      write.
-      format("csv").
-      option("delimiter",";").
-      option("header", "true").
-      mode("overwrite").
-      save(pathPrefix + "/mutation_tree/");
-    
+
     getTimeStats( chronicles, maxTime ).coalesce(1).
       write.
       format("csv").
@@ -212,6 +199,18 @@ object Analyzer {
       option("header","true").
       mode("overwrite").
       save(pathPrefix + "/final")
-      
-   }
+        
+    val mutationTree = getMutationTree( spark, chronicles );
+    // save mutationTree
+    mutationTree.
+      sort("mutation").
+      select("mutation", "parent_mutation").
+      write.
+      format("csv").
+      option("delimiter",";").
+      option("header", "true").
+      mode("overwrite").
+      save(pathPrefix + "/mutation_tree/");
+    
+  }
 }
