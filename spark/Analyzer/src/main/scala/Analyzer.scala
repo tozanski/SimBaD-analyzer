@@ -1,8 +1,9 @@
+package analyzer
+
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
 import org.apache.spark.SparkConf
 
-import org.apache.spark.storage.StorageLevel
 
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.types._
@@ -20,60 +21,14 @@ import org.apache.spark.sql.functions.count
 import org.apache.spark.sql.functions.stddev
 import org.apache.spark.sql.functions.explode
 
+// import analyzer.ChronicleLoader
+// import analyzer.ChronicleLine
 
 //    import org.apache.spark.sql.Row
 
 object Analyzer {
-  val chronicleSchema = StructType(Array(
-    StructField("id", LongType, false),
-    StructField("parent_id", LongType, false),
-    StructField("birth_time", DoubleType, false),
-    StructField("death_time", DoubleType, false),
-    StructField("position_0", FloatType, false),
-    StructField("position_1", FloatType, false),
-    StructField("position_2", FloatType, false),
-    StructField("mutation_id", LongType, false),
-    StructField("birth_efficiency", FloatType, false),
-    StructField("birth_resistance", FloatType, false),
-    StructField("lifespan_efficiency", FloatType, false),
-    StructField("lifespan_resistance", FloatType, false),
-    StructField("success_efficiency", FloatType, false),
-    StructField("success_resistance", FloatType, false)
-  ));
   
-  case class ChronicleLine(
-    id: Long,
-    parent_id: Long,
-    birth_time: Double,
-    death_time: Double,
-    position_0: Float,
-    position_1: Float,
-    position_2: Float,
-    mutation_id: Long,
-    birth_efficiency: Float,
-    birth_resistance: Float,
-    lifespan_efficiency: Float,
-    lifespan_resistance: Float,
-    success_efficiency: Float,
-    success_resistance: Float
-  );
   
-  def loadChronicles(spark: SparkSession, pathPrefix: String) : Dataset[ChronicleLine] = {
-    import spark.implicits._
-    
-    spark.
-      read.
-      format("csv").
-      option("positiveInf", "inf").
-      option("negativeInf", "-inf").
-      option("header","true").
-      option("delimiter",";").
-      option("mode","DROPMALFORMED").
-      schema(chronicleSchema).
-      load(pathPrefix).
-      as[ChronicleLine].
-      persist(StorageLevel.DISK_ONLY);
-  }
   
   def getMaxTime( chronicles: Dataset[ChronicleLine] ) : Double = {
     chronicles.agg( max("birth_time") ).collect()(0).getDouble(0);
@@ -178,7 +133,7 @@ object Analyzer {
     import spark.implicits._
     
     
-    val chronicles = loadChronicles( spark, pathPrefix + "/chronicles.csv.gz" )
+    val chronicles = ChronicleLoader.loadLines( spark, pathPrefix + "/chronicles.csv.gz" ).cache
 
     val maxTime =  getMaxTime(chronicles);    
     println("MAX TIME %s".format(maxTime));
@@ -199,7 +154,8 @@ object Analyzer {
       option("header","true").
       mode("overwrite").
       save(pathPrefix + "/final")
-        
+
+    /*    
     val mutationTree = getMutationTree( spark, chronicles );
     // save mutationTree
     mutationTree.
@@ -211,6 +167,6 @@ object Analyzer {
       option("header", "true").
       mode("overwrite").
       save(pathPrefix + "/mutation_tree/");
-    
+    */
   }
 }
