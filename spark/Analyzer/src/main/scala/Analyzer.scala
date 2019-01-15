@@ -4,6 +4,7 @@ import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
 import org.apache.spark.SparkConf
 
+import org.apache.spark.storage.StorageLevel
 
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.types._
@@ -133,7 +134,8 @@ object Analyzer {
     import spark.implicits._
     
     
-    val chronicles = ChronicleLoader.loadLines( spark, pathPrefix + "/chronicles.csv.gz" ).cache
+    val chronicles = ChronicleLoader.loadLines( spark, pathPrefix + "/chronicles.csv.gz" ).
+      persist(StorageLevel.MEMORY_AND_DISK_SER)
 
     val maxTime =  getMaxTime(chronicles);    
     println("MAX TIME %s".format(maxTime));
