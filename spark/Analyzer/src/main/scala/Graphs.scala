@@ -1,6 +1,8 @@
 package analyzer 
 
 import org.apache.spark.graphx.Edge
+import org.apache.spark.graphx.EdgeDirection
+import org.apache.spark.graphx.EdgeTriplet
 import org.apache.spark.graphx.Graph
 
 import org.apache.spark.rdd.RDD
@@ -18,7 +20,7 @@ val noCell = Cell( Double.NaN, Double.NaN, noPosition, 0, noMutation)
     )
 
     val edges = chronicleEntries.rdd.map( 
-      entry => Edge(entry.particleId, entry.parentId, entry.birthTime) 
+      entry => Edge(entry.parentId, entry.particleId, entry.birthTime) 
     )
 
     Graph(vertices, edges, noCell)
@@ -39,8 +41,36 @@ val noCell = Cell( Double.NaN, Double.NaN, noPosition, 0, noMutation)
     Graph(vertices, edges, noMutation)
   }
 
-  def ancestors( mutationTree: Graph[Mutation, Double] ) = {
-    
+  def ancestors( mutationTree: Graph[Mutation, Double] ): Graph[List[Long], Double] = {
+    val startingTree = mutationTree.mapVertices( (id,_) => if(1==id) List(id) else Nil )
+  
+    val initialMessage: List[Long] = Nil
+    val maxIterations: Int = Int.MaxValue
+    val activeDirection: EdgeDirection = EdgeDirection.Out
+
+    def vertexProgram( id: Long, currAnc: List[Long], incAnc: List[Long] ): List[Long] = {
+      if( incAnc.isEmpty ) // initial message
+        currAnc
+      else 
+        id :: incAnc 
+    }
+
+    def sendMessage( triplet: EdgeTriplet[List[Long], Double]): Iterator[(Long, List[Long])] = {
+      if( triplet.srcAttr.isEmpty || ! triplet.dstAttr.isEmpty)
+        Iterator.empty
+      else
+        Iterator( (triplet.dstId, triplet.srcAttr) )
+    }
+
+    def mergeMessage( lhs: List[Long], rhs: List[Long] ): List[Long] = {
+      throw new RuntimeException("message merging should had never occured")
+    }
+
+    startingTree.pregel(
+      initialMessage, maxIterations, activeDirection
+    )(
+      vertexProgram, sendMessage, mergeMessage
+    )
   }
 
 }
