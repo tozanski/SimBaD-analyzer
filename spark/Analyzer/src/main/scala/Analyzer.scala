@@ -55,12 +55,15 @@ object Analyzer {
           as[ChronicleEntry]
       }
     }
+    chronicleEntries = chronicleEntries.
+      repartitionByRange(1000).
+      persist(StorageLevel.DISK_ONLY)
+  
 
     val maxTime =  getMaxTime(chronicleEntries);    
     println("MAX TIME %s".format(maxTime));
 
-    val snapshots = Snapshots.getSnapshots(chronicleEntries, maxTime ).
-      repartition($"timePoint")
+    val snapshots = Snapshots.getSnapshots(chronicleEntries, maxTime );
 
     Snapshots.getTimeStats(snapshots).
       coalesce(1).
