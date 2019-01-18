@@ -19,7 +19,7 @@ import org.apache.spark.sql.functions.first
 
 object Analyzer {
   def getMaxTime( chronicles: Dataset[ChronicleEntry] ): Double = {
-    chronicles.agg( max("birth_time") ).collect()(0).getDouble(0);
+    chronicles.agg( max("birthTime") ).collect()(0).getDouble(0);
   }
   
   def main(args: Array[String]) {
