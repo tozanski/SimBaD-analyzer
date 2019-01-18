@@ -38,9 +38,9 @@ object Snapshots{
         )
   }
 
-  def getTimeStats( chronicleEntries: Dataset[ChronicleEntry], maxTime: Double ): DataFrame = {
+  def getTimeStats(snapshots: DataFrame): DataFrame = {
     
-    val timeStats = chronicleEntries.groupBy("timePoint").agg(
+    val timeStats = snapshots.groupBy("timePoint").agg(
       count(lit(1)).alias("count"), 
       //max( sqrt( $"position_0"*$"position_0" + $"position_1"*$"position_1" + $"position_2"*$"position_2")),
       // means
