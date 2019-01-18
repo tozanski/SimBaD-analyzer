@@ -42,7 +42,8 @@ object Analyzer {
     try{
       chronicleEntries = spark.
         read.
-        paquet(pathPrefix + "/chronicles.parquet")
+        parquet(pathPrefix + "/chronicles.parquet").
+        as[ChronicleEntry]
     }catch{
       case e: Exception => {
         ChronicleLoader.loadEntries( spark, pathPrefix + "/chronicles.csv.gz" ).
@@ -50,10 +51,11 @@ object Analyzer {
           parquet(pathPrefix+ "/chronicles.parquet")
         chronicleEntries = spark.
           read.
-          parquet(pathPrefix+"/chronicles.parquet")
+          parquet(pathPrefix + "/chronicles.parquet").
+          as[ChronicleEntry]
       }
     }
-    
+
     val maxTime =  getMaxTime(chronicleEntries);    
     println("MAX TIME %s".format(maxTime));
 
