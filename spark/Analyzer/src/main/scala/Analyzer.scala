@@ -56,7 +56,7 @@ object Analyzer {
       }
     }
     chronicleEntries = chronicleEntries.
-      repartitionByRange(1000).
+      repartitionByRange(1000, $"particleId").
       persist(StorageLevel.DISK_ONLY)
   
 
