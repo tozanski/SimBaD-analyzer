@@ -39,8 +39,8 @@ object ChronicleLoader{
       as[ChronicleLine];
   }
 
-/*  def loadEntries(spark: SparkSession, path: String) : Dataset[ChronicleEntry] = {
+  def loadEntries(spark: SparkSession, path: String) : Dataset[ChronicleEntry] = {
     import spark.implicits._
     loadLines(spark, path).map( line => line.toChronicleEntry );
-  }*/
+  }
 }

@@ -10,9 +10,9 @@ import org.apache.spark.sql.Dataset
 
 
 object PhylogeneticTree  {
-val noPosition = Position(Float.NaN, Float.NaN, Float.NaN)
-val noMutation = Mutation(Float.NaN, Float.NaN, Float.NaN, Float.NaN, Float.NaN, Float.NaN)
-val noCell = Cell( Double.NaN, Double.NaN, noPosition, 0, noMutation) 
+  val noPosition = Position(Float.NaN, Float.NaN, Float.NaN)
+  val noMutation = Mutation(Float.NaN, Float.NaN, Float.NaN, Float.NaN, Float.NaN, Float.NaN)
+  val noCell = Cell( Double.NaN, Double.NaN, noPosition, 0, noMutation) 
 
   def cellTree( chronicleEntries: Dataset[ChronicleEntry]): Graph[Cell, Double] = {
     val vertices = chronicleEntries.rdd.map(
@@ -41,7 +41,7 @@ val noCell = Cell( Double.NaN, Double.NaN, noPosition, 0, noMutation)
     Graph(vertices, edges, noMutation)
   }
 
-  def ancestors( mutationTree: Graph[Mutation, Double] ): Graph[List[Long], Double] = {
+  def lineage( mutationTree: Graph[Mutation, Double] ): Graph[List[Long], Double] = {
     val startingTree = mutationTree.mapVertices( (id,_) => if(1==id) List(id) else Nil )
   
     val initialMessage: List[Long] = Nil
@@ -66,11 +66,13 @@ val noCell = Cell( Double.NaN, Double.NaN, noPosition, 0, noMutation)
       throw new RuntimeException("message merging should had never occured")
     }
 
-    startingTree.pregel(
+    val result = startingTree.pregel(
       initialMessage, maxIterations, activeDirection
     )(
       vertexProgram, sendMessage, mergeMessage
     )
+    result
+    //mutationTreeAnestors.mapVertices( (id,v) => v.reverse.toIterable).vertices.sortBy( vertex => vertex._2 )
   }
 
 }
