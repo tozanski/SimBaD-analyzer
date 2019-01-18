@@ -59,7 +59,8 @@ object Analyzer {
     val maxTime =  getMaxTime(chronicleEntries);    
     println("MAX TIME %s".format(maxTime));
 
-    val snapshots = Snapshots.getSnapshots(chronicleEntries, maxTime )
+    val snapshots = Snapshots.getSnapshots(chronicleEntries, maxTime ).
+      repartition($"timePoint")
 
     Snapshots.getTimeStats(snapshots).
       coalesce(1).
