@@ -31,7 +31,6 @@ object Converter {
     import spark.implicits._
     
     ChronicleLoader.loadEntries( spark, pathPrefix + "/chronicles.csv.gz" ).
-      repartition($"particleId").
       write.
       format("parquet").
       save(pathPrefix+"/chronicles.parquet")

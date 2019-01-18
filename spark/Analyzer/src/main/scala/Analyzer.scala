@@ -37,10 +37,23 @@ object Analyzer {
     val spark = sqlContext.sparkSession;
     import spark.implicits._
     
-    val chronicleEntries = ChronicleLoader.loadEntries( spark, pathPrefix + "/chronicles.csv.gz" ).
-      repartition($"particleId").
-      persist(StorageLevel.MEMORY_AND_DISK_SER)
+    var chronicleEntries: Dataset[ChronicleEntry] = null;
 
+    try{
+      chronicleEntries = spark.
+        read.
+        paquet(pathPrefix + "/chronicles.parquet")
+    }catch{
+      case e: Exception => {
+        ChronicleLoader.loadEntries( spark, pathPrefix + "/chronicles.csv.gz" ).
+          write.
+          parquet(pathPrefix+ "/chronicles.parquet")
+        chronicleEntries = spark.
+          read.
+          parquet(pathPrefix+"/chronicles.parquet")
+      }
+    }
+    
     val maxTime =  getMaxTime(chronicleEntries);    
     println("MAX TIME %s".format(maxTime));
 
