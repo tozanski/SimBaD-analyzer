@@ -55,9 +55,9 @@ object Analyzer {
           as[ChronicleEntry]
       }
     }
-    chronicleEntries = chronicleEntries.
-      repartitionByRange(1000, $"particleId").
-      persist(StorageLevel.DISK_ONLY)
+    //chronicleEntries = chronicleEntries.
+    //  repartitionByRange(1000, $"particleId").
+    //  persist(StorageLevel.DISK_ONLY)
   
 
     val maxTime =  getMaxTime(chronicleEntries);    
