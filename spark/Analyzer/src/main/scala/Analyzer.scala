@@ -21,6 +21,19 @@ object Analyzer {
   def getMaxTime( chronicles: Dataset[ChronicleEntry] ): Double = {
     chronicles.agg( max("birthTime") ).collect()(0).getDouble(0);
   }
+
+  def saveCSV( path: String, dataframe: DataFrame, coalesce: Boolean ){
+    var df = dataframe;
+    if(coalesce)
+      df = df.coalesce(1);
+    df.
+      write.
+      format("csv").
+      option("delimiter",";").
+      option("header",true).
+      mode("overwrite").
+      save(path)
+  }
   
   def main(args: Array[String]) {
     
@@ -30,11 +43,10 @@ object Analyzer {
     args.foreach( println );
     val pathPrefix = args(0);
  
- 
-    val conf = new SparkConf().setAppName("SimBaD analyzer");
-    val sc = new SparkContext(conf);
-    val sqlContext = new SQLContext(sc);
-    val spark = sqlContext.sparkSession;
+    val spark = SparkSession.builder.
+      appName("SimBaD analyzer").
+      getOrCreate()
+
     import spark.implicits._
     
     var chronicleEntries: Dataset[ChronicleEntry] = null;
@@ -63,26 +75,22 @@ object Analyzer {
     val maxTime =  getMaxTime(chronicleEntries);    
     println("MAX TIME %s".format(maxTime));
 
+    saveCSV( pathPrefix + "/final", 
+      Snapshots.getFinal(chronicleEntries),
+      true)
+ 
     val snapshots = Snapshots.getSnapshots(chronicleEntries, maxTime );
 
-    Snapshots.getTimeStats(snapshots).
-      coalesce(1).
-      write.
-      format("csv").
-      option("delimiter",";").
-      option("header","true").
-      mode("overwrite").
-      save(pathPrefix + "/time_stats");
-    
-    Snapshots.getFinal(chronicleEntries).
-      coalesce(1).
-      write.
-      format("csv").
-      option("delimiter",";").
-      option("header","true").
-      mode("overwrite").
-      save(pathPrefix + "/final")
+    saveCSV(pathPrefix+"/time_stats", 
+      Snapshots.getTimeStats(snapshots), 
+      true)    
 
+    val cellTree = Phylogeny.cellTree(chronicleEntries);
+    val mutationTree = Phylogeny.mutationTree(cellTree).persist()
+    val lineageTree = Phylogeny.lineage(mutationTree);
 
+    saveCSV(pathPrefix + "/muller_plot_data", 
+      Muller.mullerData(spark, snapshots, lineageTree),
+      true);
   }
 }

@@ -9,7 +9,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.Dataset
 
 
-object PhylogeneticTree  {
+object Phylogeny  {
   val noPosition = Position(Float.NaN, Float.NaN, Float.NaN)
   val noMutation = Mutation(Float.NaN, Float.NaN, Float.NaN, Float.NaN, Float.NaN, Float.NaN)
   val noCell = Cell( Double.NaN, Double.NaN, noPosition, 0, noMutation) 
@@ -29,10 +29,9 @@ object PhylogeneticTree  {
   def mutationTree(cellTree: Graph[Cell, Double]): Graph[Mutation, Double] = {
     val mutatingTriplets = cellTree.
       triplets.
-      filter(triplet => triplet.srcAttr.mutationId != triplet.dstAttr.mutationId).
-      cache
+      filter(triplet => triplet.srcAttr.mutationId != triplet.dstAttr.mutationId)
 
-    val vertices = mutatingTriplets.map( t => (t.srcAttr.mutationId, t.srcAttr.mutation) ).
+    val vertices = mutatingTriplets.map( t => (t.dstAttr.mutationId, t.dstAttr.mutation) ).
       distinct
     val edges = mutatingTriplets.
       map( t=> Edge(t.srcAttr.mutationId, t.dstAttr.mutationId, t.attr) ).
@@ -66,13 +65,11 @@ object PhylogeneticTree  {
       throw new RuntimeException("message merging should had never occured")
     }
 
-    val result = startingTree.pregel(
+    startingTree.pregel(
       initialMessage, maxIterations, activeDirection
     )(
       vertexProgram, sendMessage, mergeMessage
     )
-    result
-    //mutationTreeAnestors.mapVertices( (id,v) => v.reverse.toIterable).vertices.sortBy( vertex => vertex._2 )
-  }
 
+  }
 }

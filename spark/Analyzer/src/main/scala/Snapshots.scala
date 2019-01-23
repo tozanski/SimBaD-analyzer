@@ -3,7 +3,6 @@ package analyzer
 import org.apache.spark.sql.Dataset
 import org.apache.spark.sql.DataFrame
 
-
 import org.apache.spark.sql.functions.udf
 import org.apache.spark.sql.functions.avg
 import org.apache.spark.sql.functions.first
@@ -12,8 +11,6 @@ import org.apache.spark.sql.functions.count
 import org.apache.spark.sql.functions.stddev
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.functions.explode
-
-
 
 object Snapshots{
   
@@ -73,8 +70,6 @@ object Snapshots{
         )
   }
   
- 
-
   def getTimeStats(snapshots: DataFrame): DataFrame = {
     
     val timeStats = snapshots.groupBy("timePoint").agg(
