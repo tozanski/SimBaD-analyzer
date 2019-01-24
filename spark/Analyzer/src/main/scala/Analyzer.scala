@@ -79,15 +79,17 @@ object Analyzer {
       Snapshots.getFinal(chronicleEntries),
       true)
  
-    val snapshots = Snapshots.getSnapshots(chronicleEntries, maxTime );
+    val snapshots = Snapshots.
+      getSnapshots(chronicleEntries, maxTime ).
+      persist(StorageLevel.DISK_ONLY)
 
     saveCSV(pathPrefix+"/time_stats", 
       Snapshots.getTimeStats(snapshots), 
       true)    
 
-    val cellTree = Phylogeny.cellTree(chronicleEntries);
-    val mutationTree = Phylogeny.mutationTree(cellTree).persist()
-    val lineageTree = Phylogeny.lineage(mutationTree);
+    val cellTree = Phylogeny.cellTree(chronicleEntries).persist(StorageLevel.DISK_ONLY)
+    val mutationTree = Phylogeny.mutationTree(cellTree).persist(StorageLevel.DISK_ONLY)
+    val lineageTree = Phylogeny.lineage(mutationTree).persist(StorageLevel.DISK_ONLY)
 
     saveCSV(pathPrefix + "/muller_plot_data", 
       Muller.mullerData(spark, snapshots, lineageTree),
