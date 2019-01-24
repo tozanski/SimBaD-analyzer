@@ -88,8 +88,8 @@ object Analyzer {
       true)    
 
     val cellTree = Phylogeny.cellTree(chronicleEntries)
-    val mutationTree = Phylogeny.mutationTree(cellTree).persist(StorageLevel.DISK_ONLY)
-    val lineageTree = Phylogeny.lineage(mutationTree).persist(StorageLevel.DISK_ONLY)
+    val mutationTree = Phylogeny.mutationTree(cellTree)
+    val lineageTree = Phylogeny.lineage(mutationTree)
 
     saveCSV(pathPrefix + "/muller_plot_data", 
       Muller.mullerData(spark, snapshots, lineageTree),
