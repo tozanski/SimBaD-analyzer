@@ -87,7 +87,7 @@ object Analyzer {
       Snapshots.getTimeStats(snapshots), 
       true)    
 
-    val cellTree = Phylogeny.cellTree(chronicleEntries).persist(StorageLevel.DISK_ONLY)
+    val cellTree = Phylogeny.cellTree(chronicleEntries)
     val mutationTree = Phylogeny.mutationTree(cellTree).persist(StorageLevel.DISK_ONLY)
     val lineageTree = Phylogeny.lineage(mutationTree).persist(StorageLevel.DISK_ONLY)
 
