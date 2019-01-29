@@ -40,7 +40,6 @@ object Analyzer {
     if( args.length != 1 )
       throw new RuntimeException("no prefix path given");
     
-    args.foreach( println );
     val pathPrefix = args(0);
  
     val spark = SparkSession.builder.
@@ -49,27 +48,7 @@ object Analyzer {
 
     import spark.implicits._
     
-    var chronicleEntries: Dataset[ChronicleEntry] = null;
-
-    try{
-      chronicleEntries = spark.
-        read.
-        parquet(pathPrefix + "/chronicles.parquet").
-        as[ChronicleEntry]
-    }catch{
-      case e: Exception => {
-        ChronicleLoader.loadEntries( spark, pathPrefix + "/chronicles.csv.gz" ).
-          write.
-          parquet(pathPrefix+ "/chronicles.parquet")
-        chronicleEntries = spark.
-          read.
-          parquet(pathPrefix + "/chronicles.parquet").
-          as[ChronicleEntry]
-      }
-    }
-    //chronicleEntries = chronicleEntries.
-    //  repartitionByRange(1000, $"particleId").
-    //  persist(StorageLevel.DISK_ONLY)
+    val chronicleEntries = ChronicleLoader.getOrConvertChronicles(spark, pathPrefix)
   
     spark.sparkContext.setJobGroup("max Time", "computing maximum time")
     val maxTime =  getMaxTime(chronicleEntries);    
@@ -82,21 +61,14 @@ object Analyzer {
  
     spark.sparkContext.setJobGroup("snapshots", "computing snapshots & persist")
     val snapshots = Snapshots.
-      getSnapshots(chronicleEntries, maxTime ).
-      persist(StorageLevel.DISK_ONLY)
+      getSnapshots(chronicleEntries, maxTime )//.
+      //persist(StorageLevel.DISK_ONLY)
 
     spark.sparkContext.setJobGroup("time stats", "compute & save timestats")
     saveCSV(pathPrefix+"/time_stats", 
       Snapshots.getTimeStats(snapshots), 
       true)    
 
-    val cellTree = Phylogeny.cellTree(chronicleEntries)
-    val mutationTree = Phylogeny.mutationTree(cellTree)
-    val lineageTree = Phylogeny.lineage(mutationTree)
 
-    spark.sparkContext.setJobGroup("muller","compute & save muller plot data")
-    saveCSV(pathPrefix + "/muller_plot_data", 
-      Muller.mullerData(spark, snapshots, lineageTree),
-      true);
   }
 }

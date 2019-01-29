@@ -43,4 +43,27 @@ object ChronicleLoader{
     import spark.implicits._
     loadLines(spark, path).map( line => line.toChronicleEntry );
   }
+
+  def getOrConvertChronicles(spark: SparkSession, pathPrefix: String ): Dataset[ChronicleEntry] = {
+    import spark.implicits._
+
+    var chronicleEntries: Dataset[ChronicleEntry] = null;
+    try{
+      chronicleEntries = spark.
+        read.
+        parquet(pathPrefix + "/chronicles.parquet").
+        as[ChronicleEntry]
+    }catch{
+      case e: Exception => {
+        loadEntries( spark, pathPrefix + "/chronicles.csv.gz" ).
+          write.
+          parquet(pathPrefix+ "/chronicles.parquet")
+        chronicleEntries = spark.
+          read.
+          parquet(pathPrefix + "/chronicles.parquet").
+          as[ChronicleEntry]
+      }
+    }
+    return chronicleEntries 
+  }
 }

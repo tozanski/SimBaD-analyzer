@@ -6,7 +6,11 @@ import org.apache.spark.graphx.EdgeTriplet
 import org.apache.spark.graphx.Graph
 
 import org.apache.spark.rdd.RDD
+
 import org.apache.spark.sql.Dataset
+import org.apache.spark.sql.SparkSession
+
+import org.apache.spark.storage.StorageLevel
 
 
 object Phylogeny  {
@@ -71,5 +75,29 @@ object Phylogeny  {
       vertexProgram, sendMessage, mergeMessage
     )
 
+  }
+
+  def main(args: Array[String]) = {
+    if( args.length != 1 )
+      throw new RuntimeException("no prefix path given");
+    
+    val pathPrefix = args(0);
+ 
+    val spark = SparkSession.builder.
+      appName("Phylogeny Testing").
+      getOrCreate()
+
+    val chronicleEntries = ChronicleLoader.getOrConvertChronicles(spark, pathPrefix)
+
+    val cellTree = Phylogeny.cellTree(chronicleEntries)
+    val mutationTree = Phylogeny.mutationTree(cellTree).persist(StorageLevel.DISK_ONLY)
+    mutationTree.vertices.saveAsObjectFile(pathPrefix + "/mutations.object")
+    mutationTree.edges.saveAsObjectFile(pathPrefix + "/mutationEdges.object")
+    //val lineageTree = Phylogeny.lineage(mutationTree)
+
+    //spark.sparkContext.setJobGroup("muller","compute & save muller plot data")
+    //saveCSV(pathPrefix + "/muller_plot_data", 
+    //  Muller.mullerData(spark, snapshots, lineageTree),
+    //  true);
   }
 }
