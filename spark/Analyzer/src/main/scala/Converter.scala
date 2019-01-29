@@ -22,12 +22,11 @@ object Converter {
     
     args.foreach( println );
     val pathPrefix = args(0);
- 
- 
-    val conf = new SparkConf().setAppName("SimBaD chronicles converter");
-    val sc = new SparkContext(conf);
-    val sqlContext = new SQLContext(sc);
-    val spark = sqlContext.sparkSession;
+
+    val spark = SparkSession.builder.
+      appName("SimBaD analyzer").
+      getOrCreate()
+
     import spark.implicits._
     
     ChronicleLoader.loadEntries( spark, pathPrefix + "/chronicles.csv.gz" ).

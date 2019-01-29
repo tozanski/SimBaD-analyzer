@@ -71,18 +71,21 @@ object Analyzer {
     //  repartitionByRange(1000, $"particleId").
     //  persist(StorageLevel.DISK_ONLY)
   
-
+    spark.sparkContext.setJobGroup("max Time", "computing maximum time")
     val maxTime =  getMaxTime(chronicleEntries);    
     println("MAX TIME %s".format(maxTime));
 
+    spark.sparkContext.setJobGroup("final", "saving final configuration")
     saveCSV( pathPrefix + "/final", 
       Snapshots.getFinal(chronicleEntries),
       true)
  
+    spark.sparkContext.setJobGroup("snapshots", "computing snapshots & persist")
     val snapshots = Snapshots.
       getSnapshots(chronicleEntries, maxTime ).
       persist(StorageLevel.DISK_ONLY)
 
+    spark.sparkContext.setJobGroup("time stats", "compute & save timestats")
     saveCSV(pathPrefix+"/time_stats", 
       Snapshots.getTimeStats(snapshots), 
       true)    
@@ -91,6 +94,7 @@ object Analyzer {
     val mutationTree = Phylogeny.mutationTree(cellTree)
     val lineageTree = Phylogeny.lineage(mutationTree)
 
+    spark.sparkContext.setJobGroup("muller","compute & save muller plot data")
     saveCSV(pathPrefix + "/muller_plot_data", 
       Muller.mullerData(spark, snapshots, lineageTree),
       true);
