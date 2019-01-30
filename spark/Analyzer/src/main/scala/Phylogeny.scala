@@ -4,6 +4,7 @@ import org.apache.spark.graphx.Edge
 import org.apache.spark.graphx.EdgeDirection
 import org.apache.spark.graphx.EdgeTriplet
 import org.apache.spark.graphx.Graph
+import org.apache.spark.graphx.PartitionStrategy
 
 import org.apache.spark.rdd.RDD
 
@@ -41,7 +42,7 @@ object Phylogeny  {
       map( t=> Edge(t.srcAttr.mutationId, t.dstAttr.mutationId, t.attr) ).
       distinct
 
-    Graph(vertices, edges, noMutation)
+    Graph(vertices, edges, noMutation, StorageLevel.MEMORY_AND_DISK, StorageLevel.MEMORY_AND_DISK)
   }
 
   def lineage( mutationTree: Graph[Mutation, Double] ): Graph[List[Long], Double] = {
@@ -86,18 +87,26 @@ object Phylogeny  {
     val spark = SparkSession.builder.
       appName("Phylogeny Testing").
       getOrCreate()
+    spark.sparkContext.setCheckpointDir(pathPrefix)
 
     val chronicleEntries = ChronicleLoader.getOrConvertChronicles(spark, pathPrefix)
+    spark.sparkContext.setJobGroup("max Time", "computing maximum time")
+    val maxTime = Analyzer.getMaxTime(chronicleEntries);    
 
     val cellTree = Phylogeny.cellTree(chronicleEntries)
-    val mutationTree = Phylogeny.mutationTree(cellTree).persist(StorageLevel.DISK_ONLY)
-    mutationTree.vertices.saveAsObjectFile(pathPrefix + "/mutations.object")
-    mutationTree.edges.saveAsObjectFile(pathPrefix + "/mutationEdges.object")
-    //val lineageTree = Phylogeny.lineage(mutationTree)
+    val mutationTree = Phylogeny.mutationTree(cellTree)
+    mutationTree.checkpoint
 
-    //spark.sparkContext.setJobGroup("muller","compute & save muller plot data")
-    //saveCSV(pathPrefix + "/muller_plot_data", 
-    //  Muller.mullerData(spark, snapshots, lineageTree),
-    //  true);
+    //mutationTree.vertices.saveAsObjectFile(pathPrefix + "/mutations.object")
+    //mutationTree.edges.saveAsObjectFile(pathPrefix + "/mutationEdges.object")
+    val lineageTree = Phylogeny.lineage(mutationTree)
+
+    val snapshots = Snapshots.
+      getSnapshots(chronicleEntries, maxTime )
+
+    spark.sparkContext.setJobGroup("muller","compute & save muller plot data")
+    Analyzer.saveCSV(pathPrefix + "/muller_plot_data", 
+      Muller.mullerData(spark, snapshots, lineageTree),
+      true);
   }
 }

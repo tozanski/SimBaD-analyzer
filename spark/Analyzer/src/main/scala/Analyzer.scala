@@ -46,6 +46,8 @@ object Analyzer {
       appName("SimBaD analyzer").
       getOrCreate()
 
+    spark.sparkContext.setCheckpointDir(pathPrefix + "/checkpoints/")
+
     import spark.implicits._
     
     val chronicleEntries = ChronicleLoader.getOrConvertChronicles(spark, pathPrefix)
