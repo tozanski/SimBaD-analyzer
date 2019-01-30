@@ -42,7 +42,7 @@ object Phylogeny  {
       map( t=> Edge(t.srcAttr.mutationId, t.dstAttr.mutationId, t.attr) ).
       distinct
 
-    Graph(vertices, edges, noMutation, StorageLevel.MEMORY_AND_DISK, StorageLevel.MEMORY_AND_DISK)
+    Graph(vertices, edges, noMutation, StorageLevel.DISK_ONLY, StorageLevel.DISK_ONLY)
   }
 
   def lineage( mutationTree: Graph[Mutation, Double] ): Graph[List[Long], Double] = {
@@ -97,7 +97,7 @@ object Phylogeny  {
     val mutationTree = Phylogeny.mutationTree(cellTree)
     mutationTree.checkpoint
 
-    //mutationTree.vertices.saveAsObjectFile(pathPrefix + "/mutations.object")
+    mutationTree.vertices.saveAsObjectFile(pathPrefix + "/mutations.object")
     //mutationTree.edges.saveAsObjectFile(pathPrefix + "/mutationEdges.object")
     val lineageTree = Phylogeny.lineage(mutationTree)
 
