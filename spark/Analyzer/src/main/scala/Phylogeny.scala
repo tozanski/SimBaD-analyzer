@@ -93,12 +93,21 @@ object Phylogeny  {
     spark.sparkContext.setJobGroup("max Time", "computing maximum time")
     val maxTime = Analyzer.getMaxTime(chronicleEntries);    
 
+    spark.sparkContext.setJobGroup("cellTree", "compute CellTree")
     val cellTree = Phylogeny.cellTree(chronicleEntries)
+
+    spark.sparkContext.setJobGroup("mutationTree","compute MutationTree")
     val mutationTree = Phylogeny.mutationTree(cellTree)
+    
+    spark.sparkContext.setJobGroup("checkpoint","mutationTree checkpoint")
     mutationTree.checkpoint
 
+    spark.sparkContext.setJobGroup("save vertices","save vertices")
     mutationTree.vertices.saveAsObjectFile(pathPrefix + "/mutations.object")
-    //mutationTree.edges.saveAsObjectFile(pathPrefix + "/mutationEdges.object")
+    
+    spark.sparkContext.setJobGroup("save edges","save edges")
+    mutationTree.edges.saveAsObjectFile(pathPrefix + "/mutationEdges.object")
+    
     val lineageTree = Phylogeny.lineage(mutationTree)
 
     val snapshots = Snapshots.
