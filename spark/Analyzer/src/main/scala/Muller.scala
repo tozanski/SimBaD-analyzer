@@ -44,6 +44,8 @@ object Muller{
   }
 
   def mullerData( spark: SparkSession, snapshots: DataFrame, lineageTree: Graph[List[Long], Double] ): DataFrame = {
+    import spark.implicits._
+    
     val orderedMutations = mullerOrder(spark, lineageTree)
 
     val mullerCumulatives = snapshots.
