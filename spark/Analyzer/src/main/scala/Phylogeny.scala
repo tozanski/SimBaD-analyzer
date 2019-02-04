@@ -42,7 +42,7 @@ object Phylogeny  {
       map( t=> Edge(t.srcAttr.mutationId, t.dstAttr.mutationId, t.attr) ).
       distinct
 
-    Graph(vertices, edges, noMutation, StorageLevel.DISK_ONLY, StorageLevel.DISK_ONLY)
+    Graph(vertices, edges, noMutation)
   }
 
   def lineage( mutationTree: Graph[Mutation, Double] ): Graph[List[Long], Double] = {
@@ -105,7 +105,7 @@ object Phylogeny  {
       map( t => (t.dstId, t.srcId, t.dstAttr ) ).
       toDF("id", "parentId", "mutation").
       write.
-      parquet(pathPrefix + "/mutation.parquet")
+      parquet(pathPrefix + "/mutationTree.parquet")
 
 
     spark.sparkContext.setJobGroup("checkpoint","mutationTree checkpoint")
