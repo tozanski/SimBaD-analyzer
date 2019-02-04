@@ -100,6 +100,14 @@ object Phylogeny  {
     spark.sparkContext.setJobGroup("mutationTree","compute MutationTree")
     val mutationTree = Phylogeny.mutationTree(cellTree)
     
+    spark.sparkContext.setJobGroup("mutationDataframe", "save mutation Dataframe")
+    mutationTree.triplets.
+      map( t => (t.dstId, t.srcId, t.dstAttr ) ).
+      toDF("id", "parentId", "mutation").
+      write.
+      parquet(pathPrefix + "/mutation.parquet")
+
+
     spark.sparkContext.setJobGroup("checkpoint","mutationTree checkpoint")
     mutationTree.checkpoint
 
@@ -109,8 +117,10 @@ object Phylogeny  {
     //spark.sparkContext.setJobGroup("save edges","save edges")
     //mutationTree.edges.saveAsObjectFile(pathPrefix + "/mutationEdges.object")
     
+    spark.sparkContext.setJobGroup("lineage","phylogeny lineage")
     val lineageTree = Phylogeny.lineage(mutationTree)
 
+    spark.sparkContext.setJobGroup("snapshots", "snapshots retrieval")
     val snapshots = Snapshots.
       getSnapshots(chronicleEntries, maxTime )
 
