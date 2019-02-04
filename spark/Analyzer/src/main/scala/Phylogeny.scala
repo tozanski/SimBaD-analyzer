@@ -70,13 +70,27 @@ object Phylogeny  {
       throw new RuntimeException("message merging should had never occured")
     }
 
-    startingTree.pregel(
+    val lineageTree: Graph[List[Long], Double] = startingTree.pregel(
       initialMessage, maxIterations, activeDirection
     )(
       vertexProgram, sendMessage, mergeMessage
     )
 
+    lineageTree
   }
+/*
+  def checkpoint[T](spark: SparkSession, path: String, dataset: Dataset[T]): Dataset[T] = {
+    import spark.implicits._
+    
+    dataset.
+      write.
+      parquet(path)
+    spark.
+      read.
+      parquet(path).
+      as[T]
+  }
+*/
 
   def main(args: Array[String]) = {
     if( args.length != 1 )
@@ -97,28 +111,40 @@ object Phylogeny  {
     spark.sparkContext.setJobGroup("cellTree", "compute CellTree")
     val cellTree = Phylogeny.cellTree(chronicleEntries)
 
-    spark.sparkContext.setJobGroup("mutationTree","compute MutationTree")
-    val mutationTree = Phylogeny.mutationTree(cellTree)
-    
     spark.sparkContext.setJobGroup("mutationDataframe", "save mutation Dataframe")
-    mutationTree.triplets.
-      map( t => (t.dstId, t.srcId, t.dstAttr ) ).
-      toDF("id", "parentId", "mutation").
+    Phylogeny.mutationTree(cellTree).
+      triplets.
+      map( t => (t.dstId, t.srcId, t.dstAttr, t.attr ) ).
+      toDF("id", "parentId", "mutation", "timeFirst").
       write.
+      mode("overwrite").
       parquet(pathPrefix + "/mutationTree.parquet")
 
+    val mutationDS = spark.
+      read.
+      parquet(pathPrefix + "/mutationTree.parquet").
+      as[(Long, Long, Mutation, Double)]
+        
+    val mutationTree = Graph(
+      mutationDS.map( x => (x._1, x._3)).rdd,
+      mutationDS.map( x => Edge(x._2, x._1, x._4)).rdd,
+      noMutation,
+      StorageLevel.DISK_ONLY,
+      StorageLevel.DISK_ONLY
+    )
 
-    spark.sparkContext.setJobGroup("checkpoint","mutationTree checkpoint")
-    mutationTree.checkpoint
-
-    //spark.sparkContext.setJobGroup("save vertices","save vertices")
-    //mutationTree.vertices.saveAsObjectFile(pathPrefix + "/mutations.object")
-    
-    //spark.sparkContext.setJobGroup("save edges","save edges")
-    //mutationTree.edges.saveAsObjectFile(pathPrefix + "/mutationEdges.object")
-    
     spark.sparkContext.setJobGroup("lineage","phylogeny lineage")
-    val lineageTree = Phylogeny.lineage(mutationTree)
+    Phylogeny.lineage(mutationTree).
+      vertices.
+      toDF("id","lineage").
+      write.
+      mode("overwrite").
+      parquet(pathPrefix + "/lineages.parquet")
+
+    val lineages = spark.
+      read.
+      parquet(pathPrefix + "/lineages.parquet").
+      as[(Long,List[Long])]
 
     spark.sparkContext.setJobGroup("snapshots", "snapshots retrieval")
     val snapshots = Snapshots.
@@ -126,7 +152,7 @@ object Phylogeny  {
 
     spark.sparkContext.setJobGroup("muller","compute & save muller plot data")
     Analyzer.saveCSV(pathPrefix + "/muller_plot_data", 
-      Muller.mullerData(spark, snapshots, lineageTree),
+      Muller.mullerData(spark, snapshots, lineages),
       true);
   }
 }

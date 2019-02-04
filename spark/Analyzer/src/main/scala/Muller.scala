@@ -11,7 +11,7 @@ import org.apache.spark.sql.SparkSession
 
 
 object Muller{
-  def mullerOrder( spark: SparkSession, lineageTree: Graph[List[Long], Double] ): Dataset[(Long,Long)] = {
+  def mullerOrder( spark: SparkSession, lineages: Dataset[(Long, List[Long])] ): Dataset[(Long,Long)] = {
     import spark.implicits._
 
     implicit val mutationOrder = new Ordering[Iterable[Long]]{
@@ -35,9 +35,9 @@ object Muller{
       }
     }
 
-    lineageTree.
-      mapVertices( (id,v) => v.reverse.toIterable).
-      vertices.
+    lineages.
+      rdd.
+      map( x => (x._1, x._2.reverse.toIterable) ).
       sortBy( _._2 ).
       map( _._1 ).
       toDF("mutationId").
@@ -45,10 +45,10 @@ object Muller{
       as[(Long,Long)]
   }
 
-  def mullerData( spark: SparkSession, snapshots: DataFrame, lineageTree: Graph[List[Long], Double] ): DataFrame = {
+  def mullerData( spark: SparkSession, snapshots: DataFrame, lineages: Dataset[(Long,List[Long])] ): DataFrame = {
     import spark.implicits._
 
-    val orderedMutations = mullerOrder(spark, lineageTree)
+    val orderedMutations = mullerOrder(spark, lineages)
 
     val mullerCumulatives = snapshots.
       select("mutationId","timePoint").
