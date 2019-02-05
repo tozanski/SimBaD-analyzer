@@ -79,19 +79,6 @@ object Phylogeny  {
 
     lineageTree
   }
-/*
-  def checkpoint[T](spark: SparkSession, path: String, dataset: Dataset[T]): Dataset[T] = {
-    import spark.implicits._
-    
-    dataset.
-      write.
-      parquet(path)
-    spark.
-      read.
-      parquet(path).
-      as[T]
-  }
-*/
 
   def main(args: Array[String]) = {
     if( args.length != 1 )
@@ -125,7 +112,7 @@ object Phylogeny  {
       read.
       parquet(pathPrefix + "/mutationTree.parquet").
       as[(Long, Long, Mutation, Double)].
-      repartition(col("id"))
+      repartition(100,col("id"))
         
     val mutationTree = Graph(
       mutationDS.map(x => (x._1, x._3)).rdd,
