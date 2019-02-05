@@ -14,7 +14,6 @@ import org.apache.spark.sql.functions.col
 
 import org.apache.spark.storage.StorageLevel
 
-
 object Phylogeny  {
   val noPosition = Position(Float.NaN, Float.NaN, Float.NaN)
   val noMutation = Mutation(Float.NaN, Float.NaN, Float.NaN, Float.NaN, Float.NaN, Float.NaN)
@@ -134,7 +133,7 @@ object Phylogeny  {
       read.
       parquet(pathPrefix + "/lineages.parquet").
       as[(Long,List[Long])].
-      repartition(100, col("mutationId"))
+      repartition(100, col("id"))
 
     spark.sparkContext.setJobGroup("muller","compute & save muller plot data")
     Analyzer.saveCSV(pathPrefix + "/muller_plot_data", 
