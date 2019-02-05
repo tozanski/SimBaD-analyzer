@@ -10,6 +10,7 @@ import org.apache.spark.rdd.RDD
 
 import org.apache.spark.sql.Dataset
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.functions.col
 
 import org.apache.spark.storage.StorageLevel
 
@@ -101,7 +102,7 @@ object Phylogeny  {
     val spark = SparkSession.builder.
       appName("Phylogeny Testing").
       getOrCreate()
-    spark.sparkContext.setCheckpointDir("/tmp")
+    spark.sparkContext.setCheckpointDir(pathPrefix + "/tmp")
     import spark.implicits._
 
     val chronicleEntries = ChronicleLoader.getOrConvertChronicles(spark, pathPrefix)
@@ -123,11 +124,12 @@ object Phylogeny  {
     val mutationDS = spark.
       read.
       parquet(pathPrefix + "/mutationTree.parquet").
-      as[(Long, Long, Mutation, Double)]
+      as[(Long, Long, Mutation, Double)].
+      repartition(col("id"))
         
     val mutationTree = Graph(
-      mutationDS.map( x => (x._1, x._3)).rdd,
-      mutationDS.map( x => Edge(x._2, x._1, x._4)).rdd,
+      mutationDS.map(x => (x._1, x._3)).rdd,
+      mutationDS.map(x => Edge(x._2, x._1, x._4)).rdd,
       noMutation,
       StorageLevel.DISK_ONLY,
       StorageLevel.DISK_ONLY
@@ -144,15 +146,12 @@ object Phylogeny  {
     val lineages = spark.
       read.
       parquet(pathPrefix + "/lineages.parquet").
-      as[(Long,List[Long])]
-
-    spark.sparkContext.setJobGroup("snapshots", "snapshots retrieval")
-    val snapshots = Snapshots.
-      getSnapshots(chronicleEntries, maxTime )
+      as[(Long,List[Long])].
+      repartition(100, col("mutationId"))
 
     spark.sparkContext.setJobGroup("muller","compute & save muller plot data")
     Analyzer.saveCSV(pathPrefix + "/muller_plot_data", 
-      Muller.mullerData(spark, snapshots, lineages),
+      Muller.mullerData(spark, chronicleEntries, lineages, maxTime, 100),
       true);
   }
 }

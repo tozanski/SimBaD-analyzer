@@ -13,12 +13,12 @@ import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.functions.explode
 
 object Snapshots{
-  
-  def getSnapshots( chronicles: Dataset[ChronicleEntry], maxTime: Double ): DataFrame = {
-    val snapshotsUdf = udf( 
+  def snapshotsUdf(maxTime: Double) = udf( 
       (t1:Double, t2:Double) => (0d to maxTime by 1).filter( t => t1 < t && t < t2 ) 
     )
-    chronicles.withColumn("timePoint", explode(snapshotsUdf(col("birthTime"), col("deathTime"))))
+
+  def getSnapshots( chronicles: Dataset[ChronicleEntry], maxTime: Double ): DataFrame = {
+    chronicles.withColumn("timePoint", explode(snapshotsUdf(maxTime)(col("birthTime"), col("deathTime"))))
   }
 
   def getSnapshotList( chronicles: Dataset[ChronicleEntry], timePoints: Iterable[Double] ): 
