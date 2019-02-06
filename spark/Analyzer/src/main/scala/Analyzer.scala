@@ -4,6 +4,9 @@ import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
 import org.apache.spark.SparkConf
 
+import org.apache.spark.graphx.Edge
+import org.apache.spark.graphx.Graph
+
 import org.apache.spark.storage.StorageLevel
 
 import org.apache.spark.sql.SQLContext
@@ -63,14 +66,56 @@ object Analyzer {
  
     spark.sparkContext.setJobGroup("snapshots", "computing snapshots & persist")
     val snapshots = Snapshots.
-      getSnapshots(chronicleEntries, maxTime )//.
-      //persist(StorageLevel.DISK_ONLY)
+      getSnapshots(chronicleEntries, maxTime)
 
     spark.sparkContext.setJobGroup("time stats", "compute & save timestats")
     saveCSV(pathPrefix+"/time_stats", 
       Snapshots.getTimeStats(snapshots), 
       true)    
 
+    spark.sparkContext.setJobGroup("cellTree", "compute CellTree")
+    val cellTree = Phylogeny.cellTree(chronicleEntries)
 
+    spark.sparkContext.setJobGroup("mutations", "save mutations Dataframe")
+    Phylogeny.mutationTree(cellTree).
+      triplets.
+      map( t => (t.dstId, t.srcId, t.dstAttr, t.attr ) ).
+      toDF("id", "parentId", "mutation", "timeFirst").
+      write.
+      mode("overwrite").
+      parquet(pathPrefix + "/mutationTree.parquet")
+
+    val mutationDS = spark.
+      read.
+      parquet(pathPrefix + "/mutationTree.parquet").
+      as[(Long, Long, Mutation, Double)].
+      repartition(100,col("id"))
+        
+    val mutationTree = Graph(
+      mutationDS.map(x => (x._1, x._3)).rdd,
+      mutationDS.map(x => Edge(x._2, x._1, x._4)).rdd,
+      Phylogeny.noMutation,
+      StorageLevel.DISK_ONLY,
+      StorageLevel.DISK_ONLY
+    )
+
+    spark.sparkContext.setJobGroup("lineage","phylogeny lineage")
+    Phylogeny.lineage(mutationTree).
+      vertices.
+      toDF("id","lineage").
+      write.
+      mode("overwrite").
+      parquet(pathPrefix + "/lineages.parquet")
+
+    val lineages = spark.
+      read.
+      parquet(pathPrefix + "/lineages.parquet").
+      as[(Long,List[Long])].
+      repartition(100, col("id"))
+
+    spark.sparkContext.setJobGroup("muller","save muller plot data")
+    saveCSV(pathPrefix + "/muller_plot_data", 
+      Muller.mullerData(spark, chronicleEntries, lineages, maxTime, 100),
+      true);
   }
 }
