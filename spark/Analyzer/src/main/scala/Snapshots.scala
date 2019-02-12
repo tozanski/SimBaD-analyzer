@@ -3,14 +3,16 @@ package analyzer
 import org.apache.spark.sql.Dataset
 import org.apache.spark.sql.DataFrame
 
-import org.apache.spark.sql.functions.udf
 import org.apache.spark.sql.functions.avg
-import org.apache.spark.sql.functions.first
-import org.apache.spark.sql.functions.lit
-import org.apache.spark.sql.functions.count
-import org.apache.spark.sql.functions.stddev
 import org.apache.spark.sql.functions.col
+import org.apache.spark.sql.functions.count
 import org.apache.spark.sql.functions.explode
+import org.apache.spark.sql.functions.first
+import org.apache.spark.sql.functions.hypot
+import org.apache.spark.sql.functions.lit
+import org.apache.spark.sql.functions.max
+import org.apache.spark.sql.functions.stddev
+import org.apache.spark.sql.functions.udf
 
 object Snapshots{
   def snapshotsUdf(maxTime: Double) = udf( 
@@ -34,7 +36,8 @@ object Snapshots{
       zip(timePoints).
       map( x => x._1.agg(
         count(lit(1)).alias("count"), 
-        //max( sqrt( $"position_0"*$"position_0" + $"position_1"*$"position_1" + $"position_2"*$"position_2")),
+        max(hypot(hypot("position.x", "position.y"), "position.z")).alias("max_origin_distance"),
+
         // means
         avg("mutation.birthEfficiency").alias("mean_birth_efficiency"), 
         avg("mutation.birthResistance").alias("mean_birth_resistance"), 
@@ -74,8 +77,8 @@ object Snapshots{
     
     val timeStats = snapshots.groupBy("timePoint").agg(
       count(lit(1)).alias("count"), 
-      //max( sqrt( $"position_0"*$"position_0" + $"position_1"*$"position_1" + $"position_2"*$"position_2")),
-      // means
+      max(hypot(hypot("position.x", "position.y"), "position.z")).alias("max_origin_distance"),
+
       avg("mutation.birthEfficiency").alias("mean_birth_efficiency"), 
       avg("mutation.birthResistance").alias("mean_birth_resistance"), 
       avg("mutation.lifespanEfficiency").alias("mean_lifespan_efficiency"), 
