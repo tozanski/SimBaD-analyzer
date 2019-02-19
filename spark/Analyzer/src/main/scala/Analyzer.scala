@@ -60,8 +60,14 @@ object Analyzer {
     println("MAX TIME %s".format(maxTime));
 
     spark.sparkContext.setJobGroup("final", "saving final configuration")
+    val finalConfiguration = Snapshots.getFinal(chronicleEntries) 
     saveCSV( pathPrefix + "/final", 
-      Snapshots.getFinal(chronicleEntries),
+      finalConfiguration,
+      true)
+
+    spark.sparkContext.setJobGroup("final","simple final mutation histogram")
+    saveCSV( pathPrefix + "/final_histogram",
+      Snapshots.getFinalSimpleMutationHistogram(finalConfiguration),
       true)
  
     spark.sparkContext.setJobGroup("snapshots", "computing snapshots & persist")

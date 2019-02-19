@@ -58,7 +58,6 @@ object Snapshots{
     reduce( (x,y) => x.union(y) )
   }
 
-
   def mutationSnapshots( snapshots: DataFrame ): DataFrame = {
       snapshots.
         groupBy("timePoint","mutationId").
@@ -109,6 +108,10 @@ object Snapshots{
         "mutation.successEfficiency", "mutation.successResistance"
       )
   }
+
+  def getFinalSimpleMutationHistogram( finalConfiguration: DataFrame ): DataFrame = {
+    finalConfiguration.groupBy("mutationId").count().orderBy("mutationId")
+  }
   
   def writeSnapshots( chronicles: Dataset[ChronicleLine], pathPrefix: String, maxTime: Double ) = {
     // snapshots
@@ -124,4 +127,6 @@ object Snapshots{
       save(pathPrefix + "/snapshots/" + t.toString() )  
     }
   }
+
+
 }
