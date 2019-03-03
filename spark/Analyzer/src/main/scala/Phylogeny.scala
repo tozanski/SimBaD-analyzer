@@ -101,6 +101,9 @@ object Phylogeny  {
         read.parquet(selectedTmpPath).
         as[Ancestry]  
 
+      if(selected.isEmpty)
+        throw new RuntimeException("something bad with the tree...")  
+
       selected.
         write.
         //sortBy("mutationId").
@@ -167,8 +170,7 @@ object Phylogeny  {
     val lineages = spark.
       read.
       parquet(pathPrefix + "/lineages.parquet").
-      as[Ancestry].
-      repartition(100, col("id"))
+      as[Ancestry]
 
     spark.sparkContext.setJobGroup("muller","compute & save muller plot data")
     Analyzer.saveCSV(pathPrefix + "/muller_plot_data", 
