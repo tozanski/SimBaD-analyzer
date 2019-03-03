@@ -156,9 +156,8 @@ object Phylogeny  {
     val mutationTree = spark.
       read.
       parquet(pathPrefix + "/mutationTree.parquet").
-      as[MutationTreeLink].
-      repartition(100,col("id"))
-
+      as[MutationTreeLink]
+      
     spark.sparkContext.setJobGroup("lineage","phylogeny lineage")
     Phylogeny.lineage(spark, pathPrefix, mutationTree).
       write.
