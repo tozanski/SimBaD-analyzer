@@ -13,10 +13,8 @@ import org.apache.spark.sql.functions.monotonically_increasing_id
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.SparkSession
 
-
-
 object Muller{
-  def mullerOrder( spark: SparkSession, lineages: Dataset[(Long, List[Long])] ): Dataset[(Long,Long)] = {
+  def mullerOrder( spark: SparkSession, lineages: Dataset[Ancestry] ): Dataset[(Long,Long)] = {
     import spark.implicits._
 
     implicit val mutationOrder = new Ordering[Iterable[Long]]{
@@ -42,9 +40,11 @@ object Muller{
 
     lineages.
       rdd.
-      map( x => (x._1, x._2.reverse.toIterable) ).
+      map( x => (x.mutationId, x.ancestors.toIterable) ).
       sortBy( _._2 ).
-      map( _._1 ).
+      //map( x => (x._1, x._2.toArray) ).
+      //toDF("mutationId","ancestors").
+      map( _._1).
       toDF("mutationId").
       withColumn("ordering", monotonically_increasing_id).
       as[(Long,Long)]
@@ -52,7 +52,7 @@ object Muller{
 
   def mullerData( spark: SparkSession, 
                   chronicleEntries: Dataset[ChronicleEntry], 
-                  lineages: Dataset[(Long,List[Long])],
+                  lineages: Dataset[Ancestry],
                   maxTime: Double,
                   minCellCount: Long ): DataFrame = {
     import spark.implicits._

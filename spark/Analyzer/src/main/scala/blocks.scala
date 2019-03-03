@@ -69,5 +69,48 @@ case class ChronicleLine(
     mutation_id, mutation);
   }
 
+case class Event(
+  time: Double,
+  deltaTime: Int,
+  eventKind: Int,
+  position: Position,
+  mutationId: Long,
+  mutation: Mutation
+)
 
-
+case class StreamLine(
+  position_0: Float,
+  position_1: Float,
+  position_2: Float,
+  density: Float,
+  next_event_time: Double,
+  next_event_kind: Int,
+  birth_efficiency: Float,
+  birth_resistance: Float,
+  lifespan_efficiency: Float,
+  lifespan_resistance: Float,
+  success_efficiency: Float,
+  success_resistance: Float,
+  mutation_id: Long,
+  birth_rate: Float,
+  death_rate: Float,
+  success_probability: Float,
+  lifespan: Float,
+  event_time: Double,
+  event_time_delta: Int,
+  event_kind: Int
+){
+def toEvent = Event(
+  event_time, 
+  event_time_delta,
+  event_kind,
+  Position(position_0, position_1, position_2),
+  mutation_id,
+  Mutation(
+    birth_efficiency, birth_resistance, 
+    lifespan_efficiency, lifespan_resistance, 
+    success_efficiency, success_resistance)
+)
+};
+case class MutationTreeLink(mutationId: Long, parentId: Long)
+case class Ancestry(mutationId: Long, ancestors: Array[Long])
