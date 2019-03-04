@@ -54,7 +54,7 @@ object Muller{
                   chronicleEntries: Dataset[ChronicleEntry], 
                   lineages: Dataset[Ancestry],
                   maxTime: Double,
-                  minCellCount: Long ): Dataset[(Long,Long)] = {
+                  minCellCount: Long ): Dataset[(Long, Double, Double)] = {
     import spark.implicits._
 
     val mutationSizes: Dataset[(Long,Long)] = chronicleEntries.
@@ -63,12 +63,12 @@ object Muller{
       as[(Long,Long)]
 
     val snapshots: Dataset[(Long, Double)] = chronicleEntries.
-      joinWith(mutationSizes, col("mutationId")===mutationSizes.col("mutationId")).
-      select( 
-        $"_1.mutationId".as[Long],
-        $"_1.birthTime".as[Double],
-        $"_1.deathTime".as[Double],
-        $"_2.mutationSize".as[Long]).
+      join(mutationSizes, "mutationId").
+      select(
+        $"mutationId".as[Long],
+        $"birthTime".as[Double],
+        $"deathTime".as[Double],
+        $"mutationSize".as[Long]).
       map( x => ((if( x._4 < minCellCount) 0 else x._1), x._2, x._3) ).
       toDF("mutationId","birthTime","deathTime").
       withColumn("timePoint", explode(Snapshots.snapshotsUdf(maxTime)(col("birthTime"), col("deathTime")))).
@@ -85,7 +85,7 @@ object Muller{
       dropDuplicates.
       orderBy("ordering","timePoint").
       drop("ordering").
-      as[(Long, Long)]
+      as[(Long, Double, Double)]
 
     mullerCumulatives  
   }
