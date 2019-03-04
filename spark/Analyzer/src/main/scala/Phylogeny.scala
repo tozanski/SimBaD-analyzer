@@ -109,7 +109,7 @@ object Phylogeny  {
         //sortBy("mutationId").
         //bucketBy(1024, "mutationId").
         mode("append").
-        parquet(pathPrefix+"/complete.parquet")
+        parquet(pathPrefix+"/lineages.parquet")
 
       val selected_count: Long = selected.count
       println(s"selected.count = $selected_count")
@@ -130,7 +130,7 @@ object Phylogeny  {
 
     return spark.
       read.
-      parquet(pathPrefix + "/complete.parquet").
+      parquet(pathPrefix + "/lineages.parquet").
       as[Ancestry]
   }
 
@@ -162,19 +162,11 @@ object Phylogeny  {
       as[MutationTreeLink]
       
     spark.sparkContext.setJobGroup("lineage","phylogeny lineage")
-    Phylogeny.lineage(spark, pathPrefix, mutationTree).
-      write.
-      mode("overwrite").
-      parquet(pathPrefix + "/lineages.parquet")
-
-    val lineages = spark.
-      read.
-      parquet(pathPrefix + "/lineages.parquet").
-      as[Ancestry]
+    val lineages = Phylogeny.lineage(spark, pathPrefix, mutationTree)
 
     spark.sparkContext.setJobGroup("muller","compute & save muller plot data")
     Analyzer.saveCSV(pathPrefix + "/muller_plot_data", 
-      Muller.mullerData(spark, chronicles, lineages, maxTime, 100),
+      Muller.mullerData(spark, chronicles, lineages, maxTime, 1000),
       true);
   }
 }
