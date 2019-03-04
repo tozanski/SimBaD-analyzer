@@ -19,8 +19,6 @@ import org.apache.spark.storage.StorageLevel
       as[(Long,Long)].
       withColumnRenamed("id","mutationId").
       as[MutationTreeLink]
-
-     
     */
 
 
@@ -70,7 +68,7 @@ object Phylogeny  {
       emptyDataset[Ancestry].
       write.
       mode("overwrite").
-      parquet(pathPrefix + "/complete.parquet")
+      parquet(pathPrefix + "/lineages.parquet")
 
     var selectedTmpPath: String = pathPrefix + "/selected1"
     var selectedTmpPathOther: String = pathPrefix + "/selected2"
@@ -166,7 +164,7 @@ object Phylogeny  {
 
     spark.sparkContext.setJobGroup("muller","compute & save muller plot data")
     Analyzer.saveCSV(pathPrefix + "/muller_plot_data", 
-      Muller.mullerData(spark, chronicles, lineages, maxTime, 1000),
+      Muller.mullerData(spark, chronicles, lineages, maxTime, 1000).toDF,
       true);
   }
 }

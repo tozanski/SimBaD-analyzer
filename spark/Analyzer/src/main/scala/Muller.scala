@@ -54,31 +54,38 @@ object Muller{
                   chronicleEntries: Dataset[ChronicleEntry], 
                   lineages: Dataset[Ancestry],
                   maxTime: Double,
-                  minCellCount: Long ): DataFrame = {
+                  minCellCount: Long ): Dataset[(Long,Long)] = {
     import spark.implicits._
 
-    val mutationSizes = chronicleEntries.
+    val mutationSizes: Dataset[(Long,Long)] = chronicleEntries.
       groupBy("mutationId").
       agg( count(lit(1)).alias("mutationSize") ).
       as[(Long,Long)]
 
-    val snapshots = chronicleEntries.select( "mutationId", "birthTime", "deathTime").
-      join(mutationSizes, "mutationId").
-      as[(Long,Double,Double,Long)].
-      map( x => ( if( x._4 < minCellCount) 0 else x._1, x._2, x._3) ).
+    val snapshots: Dataset[(Long, Double)] = chronicleEntries.
+      joinWith(mutationSizes, col("mutationId")===mutationSizes.col("mutationId")).
+      select( 
+        $"_1.mutationId".as[Long],
+        $"_1.birthTime".as[Double],
+        $"_1.deathTime".as[Double],
+        $"_2.mutationSize".as[Long]).
+      map( x => ((if( x._4 < minCellCount) 0 else x._1), x._2, x._3) ).
       toDF("mutationId","birthTime","deathTime").
-      withColumn("timePoint", explode(Snapshots.snapshotsUdf(maxTime)(col("birthTime"), col("deathTime"))))
+      withColumn("timePoint", explode(Snapshots.snapshotsUdf(maxTime)(col("birthTime"), col("deathTime")))).
+      select(
+        $"mutationId".as[Long], 
+        $"timePoint".as[Double])
 
-    val orderedMutations = mullerOrder(spark, lineages)
+    val orderedMutations: Dataset[(Long, Long)] = mullerOrder(spark, lineages)
 
     val mullerCumulatives = snapshots.
-      select("mutationId","timePoint").
       join(orderedMutations,"mutationId").
       withColumn("cumeDist", 
         cume_dist over Window.partitionBy("timePoint").orderBy("ordering")).
       dropDuplicates.
       orderBy("ordering","timePoint").
-      drop("ordering")
+      drop("ordering").
+      as[(Long, Long)]
 
     mullerCumulatives  
   }

@@ -77,7 +77,8 @@ object Analyzer {
     spark.sparkContext.setJobGroup("time stats", "compute & save timestats")
     saveCSV(pathPrefix+"/time_stats", 
       Snapshots.getTimeStats(snapshots), 
-      true)    
+      true)   
+
     spark.sparkContext.setJobGroup("mutation tree", "save mutation tree")
     Phylogeny.mutationTree(spark, chronicles).
       write.
@@ -87,24 +88,14 @@ object Analyzer {
     val mutationTree = spark.
       read.
       parquet(pathPrefix + "/mutationTree.parquet").
-      as[MutationTreeLink].
-      repartition(100,col("id"))
-
+      as[MutationTreeLink]
+      
     spark.sparkContext.setJobGroup("lineage","phylogeny lineage")
-    Phylogeny.lineage(spark, pathPrefix, mutationTree).
-      write.
-      mode("overwrite").
-      parquet(pathPrefix + "/lineages.parquet")
-
-    val lineages = spark.
-      read.
-      parquet(pathPrefix + "/lineages.parquet").
-      as[Ancestry].
-      repartition(100, col("id"))
+    val lineages = Phylogeny.lineage(spark, pathPrefix, mutationTree)
 
     spark.sparkContext.setJobGroup("muller","compute & save muller plot data")
     Analyzer.saveCSV(pathPrefix + "/muller_plot_data", 
-      Muller.mullerData(spark, chronicles, lineages, maxTime, 100),
+      Muller.mullerData(spark, chronicles, lineages, maxTime, 1000).toDF,
       true);
   }
 }
