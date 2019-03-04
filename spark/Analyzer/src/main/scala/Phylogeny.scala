@@ -131,6 +131,23 @@ object Phylogeny  {
       parquet(pathPrefix + "/lineages.parquet").
       as[Ancestry]
   }
+  def getOrComputeMutationTree(spark: SparkSession, pathPrefix: String, chronicles: Dataset[ChronicleEntry]): Dataset[MutationTreeLink] = {
+
+    import spark.implicits._
+ 
+    var mutationTree: Dataset[MutationTreeLink] = null
+    val mutationPath = pathPrefix + "/mutationTree.parquet"
+    try{
+      mutationTree = spark.read.parquet(mutationPath).as[MutationTreeLink]
+    }catch{
+      case e: Exception => {
+        spark.sparkContext.setJobGroup("mutation tree", "save mutation tree")
+        Phylogeny.mutationTree(spark, chronicles).write.mode("overwrite").parquet(mutationPath)
+        mutationTree = spark.read.parquet(mutationPath).as[MutationTreeLink]
+      }
+    }
+    return mutationTree
+  }
 
   def main(args: Array[String]) = {
     if( args.length != 1 )
@@ -142,22 +159,14 @@ object Phylogeny  {
       appName("Phylogeny Testing").
       getOrCreate()
     spark.sparkContext.setCheckpointDir(pathPrefix + "/tmp")
+    
     import spark.implicits._
 
     val chronicles = ChronicleLoader.getOrConvertChronicles(spark, pathPrefix)
     spark.sparkContext.setJobGroup("max Time", "computing maximum time")
     val maxTime = Analyzer.getMaxTime(chronicles);    
 
-    spark.sparkContext.setJobGroup("mutation tree", "save mutation tree")
-    Phylogeny.mutationTree(spark, chronicles).
-      write.
-      mode("overwrite").
-      parquet(pathPrefix + "/mutationTree.parquet")
-
-    val mutationTree = spark.
-      read.
-      parquet(pathPrefix + "/mutationTree.parquet").
-      as[MutationTreeLink]
+    val mutationTree = Phylogeny.getOrComputeMutationTree(spark, pathPrefix, chronicles)
       
     spark.sparkContext.setJobGroup("lineage","phylogeny lineage")
     val lineages = Phylogeny.lineage(spark, pathPrefix, mutationTree)

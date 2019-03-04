@@ -79,16 +79,7 @@ object Analyzer {
       Snapshots.getTimeStats(snapshots), 
       true)   
 
-    spark.sparkContext.setJobGroup("mutation tree", "save mutation tree")
-    Phylogeny.mutationTree(spark, chronicles).
-      write.
-      mode("overwrite").
-      parquet(pathPrefix + "/mutationTree.parquet")
-
-    val mutationTree = spark.
-      read.
-      parquet(pathPrefix + "/mutationTree.parquet").
-      as[MutationTreeLink]
+    val mutationTree = Phylogeny.getOrComputeMutationTree(spark, pathPrefix, chronicles)
       
     spark.sparkContext.setJobGroup("lineage","phylogeny lineage")
     val lineages = Phylogeny.lineage(spark, pathPrefix, mutationTree)
