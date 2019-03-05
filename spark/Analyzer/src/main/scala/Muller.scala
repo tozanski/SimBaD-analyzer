@@ -9,6 +9,7 @@ import org.apache.spark.sql.functions.lit
 import org.apache.spark.sql.functions.explode
 import org.apache.spark.sql.functions.count
 import org.apache.spark.sql.functions.col
+import org.apache.spark.sql.functions.when
 import org.apache.spark.sql.functions.monotonically_increasing_id
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.SparkSession
@@ -51,35 +52,29 @@ object Muller{
   }
 
   def mullerData( spark: SparkSession, 
-                  chronicleEntries: Dataset[ChronicleEntry], 
+                  chronicles: Dataset[ChronicleEntry], 
                   lineages: Dataset[Ancestry],
                   maxTime: Double,
                   minCellCount: Long ): Dataset[(Long, Double, Double)] = {
     import spark.implicits._
 
-    val mutationSizes: Dataset[(Long,Long)] = chronicleEntries.
+    val mutationSizes: Dataset[(Long,Long)] = chronicles.
       groupBy("mutationId").
       agg( count(lit(1)).alias("mutationSize") ).
       as[(Long,Long)]
 
-    val snapshots: Dataset[(Long, Double)] = chronicleEntries.
+    val snapshots: Dataset[(Long, Double)] = chronicles.
       join(mutationSizes, "mutationId").
-      select(
-        $"mutationId".as[Long],
-        $"birthTime".as[Double],
-        $"deathTime".as[Double],
-        $"mutationSize".as[Long]).
-      map( x => ((if( x._4 < minCellCount) 0 else x._1), x._2, x._3) ).
-      toDF("mutationId","birthTime","deathTime").
+      withColumn("aggMutationId", when($"mutationSize" < 1000, 0l).otherwise($"mutationId")).
       withColumn("timePoint", explode(Snapshots.snapshotsUdf(maxTime)(col("birthTime"), col("deathTime")))).
       select(
-        $"mutationId".as[Long], 
+        $"aggMutationId".alias("mutationId").as[Long], 
         $"timePoint".as[Double])
 
     val orderedMutations: Dataset[(Long, Long)] = mullerOrder(spark, lineages)
 
     val mullerCumulatives = snapshots.
-      join(orderedMutations,"mutationId").
+      join(orderedMutations,Seq("mutationId"), "left").
       withColumn("cumeDist", 
         cume_dist over Window.partitionBy("timePoint").orderBy("ordering")).
       dropDuplicates.

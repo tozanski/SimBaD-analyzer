@@ -135,18 +135,18 @@ object Phylogeny  {
 
     import spark.implicits._
  
-    var mutationTree: Dataset[MutationTreeLink] = null
+    var mutations: Dataset[MutationTreeLink] = null
     val mutationPath = pathPrefix + "/mutationTree.parquet"
     try{
-      mutationTree = spark.read.parquet(mutationPath).as[MutationTreeLink]
+      mutations = spark.read.parquet(mutationPath).as[MutationTreeLink]
     }catch{
       case e: Exception => {
         spark.sparkContext.setJobGroup("mutation tree", "save mutation tree")
-        Phylogeny.mutationTree(spark, chronicles).write.mode("overwrite").parquet(mutationPath)
-        mutationTree = spark.read.parquet(mutationPath).as[MutationTreeLink]
+        mutationTree(spark, chronicles).write.mode("overwrite").parquet(mutationPath)
+        mutations = spark.read.parquet(mutationPath).as[MutationTreeLink]
       }
     }
-    return mutationTree
+    return mutations
   }
 
   def main(args: Array[String]) = {
