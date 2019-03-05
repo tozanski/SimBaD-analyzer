@@ -81,8 +81,7 @@ object Analyzer {
 
     val mutationTree = Phylogeny.getOrComputeMutationTree(spark, pathPrefix, chronicles)
       
-    spark.sparkContext.setJobGroup("lineage","phylogeny lineage")
-    val lineages = Phylogeny.lineage(spark, pathPrefix, mutationTree)
+    val lineages = getOrComputeLineages(spark, pathPrefix, mutationTree)
 
     spark.sparkContext.setJobGroup("muller","compute & save muller plot data")
     Analyzer.saveCSV(pathPrefix + "/muller_plot_data", 
