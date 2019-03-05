@@ -53,14 +53,14 @@ object Analyzer {
 
     import spark.implicits._
     
-    val chronicleEntries = ChronicleLoader.getOrConvertChronicles(spark, pathPrefix)
+    val chronicles = ChronicleLoader.getOrConvertChronicles(spark, pathPrefix)
   
     spark.sparkContext.setJobGroup("max Time", "computing maximum time")
-    val maxTime =  getMaxTime(chronicleEntries);    
+    val maxTime =  getMaxTime(chronicles);    
     println("MAX TIME %s".format(maxTime));
 
     spark.sparkContext.setJobGroup("final", "saving final configuration")
-    val finalConfiguration = Snapshots.getFinal(chronicleEntries) 
+    val finalConfiguration = Snapshots.getFinal(chronicles) 
     saveCSV( pathPrefix + "/final", 
       finalConfiguration,
       true)
@@ -72,56 +72,21 @@ object Analyzer {
  
     spark.sparkContext.setJobGroup("snapshots", "computing snapshots & persist")
     val snapshots = Snapshots.
-      getSnapshots(chronicleEntries, maxTime)
+      getSnapshots(chronicles, maxTime)
 
     spark.sparkContext.setJobGroup("time stats", "compute & save timestats")
     saveCSV(pathPrefix+"/time_stats", 
       Snapshots.getTimeStats(snapshots), 
-      true)    
+      true)   
 
-    spark.sparkContext.setJobGroup("cellTree", "compute CellTree")
-    val cellTree = Phylogeny.cellTree(chronicleEntries)
-
-    spark.sparkContext.setJobGroup("mutations", "save mutations Dataframe")
-    Phylogeny.mutationTree(cellTree).
-      triplets.
-      map( t => (t.dstId, t.srcId, t.dstAttr, t.attr ) ).
-      toDF("id", "parentId", "mutation", "timeFirst").
-      write.
-      mode("overwrite").
-      parquet(pathPrefix + "/mutationTree.parquet")
-
-    val mutationDS = spark.
-      read.
-      parquet(pathPrefix + "/mutationTree.parquet").
-      as[(Long, Long, Mutation, Double)].
-      repartition(100,col("id"))
-        
-    val mutationTree = Graph(
-      mutationDS.map(x => (x._1, x._3)).rdd,
-      mutationDS.map(x => Edge(x._2, x._1, x._4)).rdd,
-      Phylogeny.noMutation,
-      StorageLevel.DISK_ONLY,
-      StorageLevel.DISK_ONLY
-    )
-
+    val mutationTree = Phylogeny.getOrComputeMutationTree(spark, pathPrefix, chronicles)
+      
     spark.sparkContext.setJobGroup("lineage","phylogeny lineage")
-    Phylogeny.lineage(mutationTree).
-      vertices.
-      toDF("id","lineage").
-      write.
-      mode("overwrite").
-      parquet(pathPrefix + "/lineages.parquet")
+    val lineages = Phylogeny.lineage(spark, pathPrefix, mutationTree)
 
-    val lineages = spark.
-      read.
-      parquet(pathPrefix + "/lineages.parquet").
-      as[(Long,List[Long])].
-      repartition(100, col("id"))
-
-    spark.sparkContext.setJobGroup("muller","save muller plot data")
-    saveCSV(pathPrefix + "/muller_plot_data", 
-      Muller.mullerData(spark, chronicleEntries, lineages, maxTime, 100),
+    spark.sparkContext.setJobGroup("muller","compute & save muller plot data")
+    Analyzer.saveCSV(pathPrefix + "/muller_plot_data", 
+      Muller.mullerData(spark, chronicles, lineages, maxTime, 1000).toDF,
       true);
   }
 }

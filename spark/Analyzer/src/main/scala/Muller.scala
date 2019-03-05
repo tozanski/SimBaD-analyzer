@@ -9,14 +9,13 @@ import org.apache.spark.sql.functions.lit
 import org.apache.spark.sql.functions.explode
 import org.apache.spark.sql.functions.count
 import org.apache.spark.sql.functions.col
+import org.apache.spark.sql.functions.when
 import org.apache.spark.sql.functions.monotonically_increasing_id
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.SparkSession
 
-
-
 object Muller{
-  def mullerOrder( spark: SparkSession, lineages: Dataset[(Long, List[Long])] ): Dataset[(Long,Long)] = {
+  def mullerOrder( spark: SparkSession, lineages: Dataset[Ancestry] ): Dataset[(Long,Long)] = {
     import spark.implicits._
 
     implicit val mutationOrder = new Ordering[Iterable[Long]]{
@@ -42,43 +41,46 @@ object Muller{
 
     lineages.
       rdd.
-      map( x => (x._1, x._2.reverse.toIterable) ).
+      map( x => (x.mutationId, x.ancestors.toIterable) ).
       sortBy( _._2 ).
-      map( _._1 ).
+      //map( x => (x._1, x._2.toArray) ).
+      //toDF("mutationId","ancestors").
+      map( _._1).
       toDF("mutationId").
       withColumn("ordering", monotonically_increasing_id).
       as[(Long,Long)]
   }
 
   def mullerData( spark: SparkSession, 
-                  chronicleEntries: Dataset[ChronicleEntry], 
-                  lineages: Dataset[(Long,List[Long])],
+                  chronicles: Dataset[ChronicleEntry], 
+                  lineages: Dataset[Ancestry],
                   maxTime: Double,
-                  minCellCount: Long ): DataFrame = {
+                  minCellCount: Long ): Dataset[(Long, Double, Double)] = {
     import spark.implicits._
 
-    val mutationSizes = chronicleEntries.
+    val mutationSizes: Dataset[(Long,Long)] = chronicles.
       groupBy("mutationId").
       agg( count(lit(1)).alias("mutationSize") ).
       as[(Long,Long)]
 
-    val snapshots = chronicleEntries.select( "mutationId", "birthTime", "deathTime").
+    val snapshots: Dataset[(Long, Double)] = chronicles.
       join(mutationSizes, "mutationId").
-      as[(Long,Double,Double,Long)].
-      map( x => ( if( x._4 < minCellCount) 0 else x._1, x._2, x._3) ).
-      toDF("mutationId","birthTime","deathTime").
-      withColumn("timePoint", explode(Snapshots.snapshotsUdf(maxTime)(col("birthTime"), col("deathTime"))))
+      withColumn("aggMutationId", when($"mutationSize" < 1000, 0l).otherwise($"mutationId")).
+      withColumn("timePoint", explode(Snapshots.snapshotsUdf(maxTime)(col("birthTime"), col("deathTime")))).
+      select(
+        $"aggMutationId".alias("mutationId").as[Long], 
+        $"timePoint".as[Double])
 
-    val orderedMutations = mullerOrder(spark, lineages)
+    val orderedMutations: Dataset[(Long, Long)] = mullerOrder(spark, lineages)
 
     val mullerCumulatives = snapshots.
-      select("mutationId","timePoint").
-      join(orderedMutations,"mutationId").
+      join(orderedMutations,Seq("mutationId"), "left").
       withColumn("cumeDist", 
         cume_dist over Window.partitionBy("timePoint").orderBy("ordering")).
       dropDuplicates.
       orderBy("ordering","timePoint").
-      drop("ordering")
+      drop("ordering").
+      as[(Long, Double, Double)]
 
     mullerCumulatives  
   }
