@@ -63,12 +63,14 @@ object Phylogeny  {
   def lineage(spark: SparkSession, pathPrefix: String, mutations: Dataset[MutationTreeLink], root: Long = 1): Dataset[Ancestry] = {
     import spark.implicits._
     
+    val lineagesTmpPath = pathPrefix + "/lineages.tmp"
+
     // clear previous results
     spark. 
       emptyDataset[Ancestry].
       write.
       mode("overwrite").
-      parquet(pathPrefix + "/lineages.parquet")
+      parquet(lineagesTmpPath)
 
     var selectedTmpPath: String = pathPrefix + "/selected1"
     var selectedTmpPathOther: String = pathPrefix + "/selected2"
@@ -107,7 +109,7 @@ object Phylogeny  {
         //sortBy("mutationId").
         //bucketBy(1024, "mutationId").
         mode("append").
-        parquet(pathPrefix+"/lineages.parquet")
+        parquet(lineagesTmpPath)
 
       val selected_count: Long = selected.count
       println(s"selected.count = $selected_count")
@@ -128,11 +130,10 @@ object Phylogeny  {
 
     return spark.
       read.
-      parquet(pathPrefix + "/lineages.parquet").
+      parquet(lineagesTmpPath).
       as[Ancestry]
   }
   def getOrComputeMutationTree(spark: SparkSession, pathPrefix: String, chronicles: Dataset[ChronicleEntry]): Dataset[MutationTreeLink] = {
-
     import spark.implicits._
  
     var mutations: Dataset[MutationTreeLink] = null
@@ -147,6 +148,23 @@ object Phylogeny  {
       }
     }
     return mutations
+  }
+
+  def getOrComputeLineages(spark: SparkSession, pathPrefix: String, mutationTree: Dataset[MutationTreeLink]): Dataset[Ancestry] = {
+    import spark.implicits._
+ 
+    var lineages: Dataset[Ancestry] = null
+    val lineagesPath = pathPrefix + "/lineages.parquet"
+    try{
+      lineages = spark.read.parquet(lineagesPath).as[Ancestry]
+    }catch{
+      case e: Exception => {
+        spark.sparkContext.setJobGroup("lineage","phylogeny lineage")
+        lineage(spark, pathPrefix, mutationTree).write.mode("overwrite").parquet(lineagesPath)
+        lineages = spark.read.parquet(lineagesPath).as[Ancestry]
+      }
+    }
+    return lineages
   }
 
   def main(args: Array[String]) = {
@@ -168,8 +186,7 @@ object Phylogeny  {
 
     val mutationTree = Phylogeny.getOrComputeMutationTree(spark, pathPrefix, chronicles)
       
-    spark.sparkContext.setJobGroup("lineage","phylogeny lineage")
-    val lineages = Phylogeny.lineage(spark, pathPrefix, mutationTree)
+    val lineages = getOrComputeLineages(spark, pathPrefix, mutationTree)
 
     spark.sparkContext.setJobGroup("muller","compute & save muller plot data")
     Analyzer.saveCSV(pathPrefix + "/muller_plot_data", 
