@@ -1,24 +1,17 @@
 package analyzer
 
-import org.apache.spark.SparkContext
-import org.apache.spark.SparkContext._
-import org.apache.spark.SparkConf
-
-import org.apache.spark.graphx.Edge
-import org.apache.spark.graphx.Graph
-
 import org.apache.spark.storage.StorageLevel
 
 import org.apache.spark.sql.SQLContext
-import org.apache.spark.sql.types._
+
 import org.apache.spark.sql.Dataset
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.SparkSession
 
-import org.apache.spark.sql.functions.max
-import org.apache.spark.sql.functions.col
-import org.apache.spark.sql.functions.first
+import org.apache.spark.sql.functions.{
+  col, count, lit, max
+}
 
 object Analyzer {
   def getMaxTime( chronicles: Dataset[ChronicleEntry] ): Double = {
@@ -37,7 +30,7 @@ object Analyzer {
       mode("overwrite").
       save(path)
   }
-  
+
   def main(args: Array[String]) {
     
     if( args.length != 1 )
@@ -59,33 +52,44 @@ object Analyzer {
     val maxTime =  getMaxTime(chronicles);    
     println("MAX TIME %s".format(maxTime));
 
-    spark.sparkContext.setJobGroup("final", "saving final configuration")
-    val finalConfiguration = Snapshots.getFinal(chronicles) 
-    saveCSV( pathPrefix + "/final", 
-      finalConfiguration,
-      true)
+    val largeMutations: Dataset[Long] = chronicles.
+      groupBy("mutationId").
+      agg( count(lit(1)).alias("mutationSize") ).
+      filter( $"mutationSize" > 1000 ).
+      select($"mutationId".as[Long]).
+      persist(StorageLevel.MEMORY_AND_DISK)
 
-    spark.sparkContext.setJobGroup("final","simple final mutation histogram")
-    saveCSV( pathPrefix + "/final_histogram",
-      Snapshots.getFinalSimpleMutationHistogram(finalConfiguration),
-      true)
- 
-    spark.sparkContext.setJobGroup("snapshots", "computing snapshots & persist")
-    val snapshots = Snapshots.
-      getSnapshots(chronicles, maxTime)
+    val mutationTree = Phylogeny.getOrComputeMutationTree(spark, pathPrefix, chronicles)      
+    val lineages = Phylogeny.getOrComputeLineages(spark, pathPrefix, mutationTree)
 
-    spark.sparkContext.setJobGroup("time stats", "compute & save timestats")
-    saveCSV(pathPrefix+"/time_stats", 
-      Snapshots.getTimeStats(snapshots), 
-      true)   
+    val largeMullerOrder = Muller.mullerOrder( 
+      lineages.
+        join(largeMutations,"mutationId").
+        as[Ancestry]
+      ).
+      persist(StorageLevel.MEMORY_AND_DISK)
 
-    val mutationTree = Phylogeny.getOrComputeMutationTree(spark, pathPrefix, chronicles)
-      
-    val lineages = getOrComputeLineages(spark, pathPrefix, mutationTree)
+    val statsTmpPath = pathPrefix + "/stats.tmp"
+    val snapshotPath = pathPrefix + "/snapshots"
+    val mullerTmpPath = pathPrefix + "/muller.tmp"
 
-    spark.sparkContext.setJobGroup("muller","compute & save muller plot data")
-    Analyzer.saveCSV(pathPrefix + "/muller_plot_data", 
-      Muller.mullerData(spark, chronicles, lineages, maxTime, 1000).toDF,
-      true);
+    for( time <- 0d to maxTime by 1.0d)
+    {
+      val snapshot = Snapshots.getSnapshot(chronicles, time).
+        persist(StorageLevel.MEMORY_AND_DISK)
+
+      Snapshots.getTimeStats(spark, snapshot).
+        withColumn("timePoint", lit(time)).as[Double].
+        write.
+        mode("append").
+        parquet(statsTmpPath)
+
+      Muller.mullerPlotSnapshot(snapshot, largeMullerOrder).
+        write.
+        mode("append").
+        parquet(mullerTmpPath)
+
+      snapshot.unpersist()
+    }
   }
 }

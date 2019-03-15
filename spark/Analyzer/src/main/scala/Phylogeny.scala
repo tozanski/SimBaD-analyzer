@@ -7,6 +7,7 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions.col
 
 import org.apache.spark.storage.StorageLevel
+import org.apache.spark.sql.{Encoder, Encoders}
 /*
     val pathPrefix = "/scratch/WCSS/20190110-202151-334492354-simulation-test/"
 
@@ -23,25 +24,28 @@ import org.apache.spark.storage.StorageLevel
 
 
 object Phylogeny  {
-  def mutationTree(spark: SparkSession, chronicles: Dataset[ChronicleEntry]): Dataset[MutationTreeLink] = {
-    import spark.implicits._
+  def mutationTree(chronicles: Dataset[ChronicleEntry]): Dataset[MutationTreeLink] = {  
 
-    val cellLinks: Dataset[(Long,Long,Long)] = chronicles.
+    val children = chronicles.
+      select( 
+        col("parentId").as(Encoders.LONG),
+        col("mutationId").as(Encoders.LONG)).
+      alias("children")
+
+    val parents = chronicles.
       select(
-        col("particleId").as[Long], 
-        col("parentId").as[Long],
-        col("mutationId").as[Long])
-
-    val children = cellLinks.alias("children")
-    val parents = cellLinks.alias("parents")
+        col("particleId").as(Encoders.LONG), 
+        col("mutationId").as(Encoders.LONG)).
+      alias("parents")
 
     children.
       joinWith(parents, col("children.parentId")===col("parents.particleId"), "left_outer").
       filter(col("_1.mutationId") =!= col("_2.mutationId")).
       select(
-        col("_1.mutationId").as[Long], 
-        col("_2.mutationId").as[Long]).
-      map( x => MutationTreeLink(x._1, x._2))      
+        col("_1.mutationId").as("mutationId").as(Encoders.LONG), 
+        col("_2.mutationId").as("parentId").as(Encoders.LONG)
+      ).
+      as(Encoders.product[MutationTreeLink])
   }
 
 /*
@@ -143,7 +147,7 @@ object Phylogeny  {
     }catch{
       case e: Exception => {
         spark.sparkContext.setJobGroup("mutation tree", "save mutation tree")
-        mutationTree(spark, chronicles).write.mode("overwrite").parquet(mutationPath)
+        mutationTree(chronicles).write.mode("overwrite").parquet(mutationPath)
         mutations = spark.read.parquet(mutationPath).as[MutationTreeLink]
       }
     }

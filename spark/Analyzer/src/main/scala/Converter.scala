@@ -26,8 +26,6 @@ object Converter {
     val spark = SparkSession.builder.
       appName("SimBaD analyzer").
       getOrCreate()
-
-    import spark.implicits._
     
     ChronicleLoader.loadEntries( spark, pathPrefix + "/chronicles.csv.gz" ).
       write.

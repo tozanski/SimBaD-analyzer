@@ -4,19 +4,19 @@ import org.apache.spark.graphx.Graph
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.Dataset
-import org.apache.spark.sql.functions.cume_dist
-import org.apache.spark.sql.functions.lit
-import org.apache.spark.sql.functions.explode
-import org.apache.spark.sql.functions.count
-import org.apache.spark.sql.functions.col
-import org.apache.spark.sql.functions.when
-import org.apache.spark.sql.functions.monotonically_increasing_id
+
+import org.apache.spark.sql.functions.{
+  cume_dist, col, count, explode, lit, when,monotonically_increasing_id
+}
+import org.apache.spark.sql.{Encoder, Encoders}
+
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.SparkSession
 
 object Muller{
-  def mullerOrder( spark: SparkSession, lineages: Dataset[Ancestry] ): Dataset[(Long,Long)] = {
-    import spark.implicits._
+  def mullerOrder(lineages: Dataset[Ancestry] ): Dataset[(Long,Long)] = {
+
+    import lineages.sparkSession.implicits._
 
     implicit val mutationOrder = new Ordering[Iterable[Long]]{
       override def compare( lhs: Iterable[Long], rhs: Iterable[Long]): Int = {
@@ -71,7 +71,7 @@ object Muller{
         $"aggMutationId".alias("mutationId").as[Long], 
         $"timePoint".as[Double])
 
-    val orderedMutations: Dataset[(Long, Long)] = mullerOrder(spark, lineages)
+    val orderedMutations: Dataset[(Long, Long)] = mullerOrder(lineages)
 
     val mullerCumulatives = snapshots.
       join(orderedMutations,Seq("mutationId"), "left").
@@ -83,5 +83,15 @@ object Muller{
       as[(Long, Double, Double)]
 
     mullerCumulatives  
+  }
+
+  def mullerPlotSnapshot(snapshot: Dataset[Cell], mutationOrder: Dataset[(Long, Long)]): Dataset[(Long, Long)] = {
+    snapshot.
+      groupBy("mutationId").
+      agg(count(lit(1)).alias("count")).
+      join(mutationOrder, Seq("mutationId"), "left").
+      withColumn("cumeDist", 
+        cume_dist over Window.orderBy("ordering")).
+      as(Encoders.product[(Long,Long)])
   }
 }
