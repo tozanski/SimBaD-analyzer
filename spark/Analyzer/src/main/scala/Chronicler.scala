@@ -241,18 +241,24 @@ object Chronicler {
     val groupedEvents = groupEvents(events, singlePartition = true)
     val initialSnapshot: Dataset[Cell] = startingSnapshot(spark)
 
-    computeLinearChronicles(initialSnapshot, groupedEvents).
-      write.
-      mode("overwrite").
-      parquet(pathPrefix+"/linearChronicles.parquet")
+    val linearChronicles =
+      computeLinearChronicles(initialSnapshot, groupedEvents).
+      repartition(col("eventKind")).
+      cache()
 
-    val linearChronicles = spark.
-      read.
-      parquet(pathPrefix+"linearChronicles.parquet")
+//      write.
+//      mode("overwrite").
+//      parquet(pathPrefix+"/linearChronicles.parquet")
+//
+//    val linearChronicles = spark.
+//      read.
+//      parquet(pathPrefix+"linearChronicles.parquet")
 
     computeChronicles(linearChronicles).
       write.
       mode("overwrite").
       parquet(pathPrefix+"/newChronicles.parquet")
+
+//    linearChronicles.unpersist()
   }
 }
