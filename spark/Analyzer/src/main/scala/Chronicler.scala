@@ -118,6 +118,34 @@ object Chronicler {
       ).as(Encoders.product[Event])
     )
   }
+  def withExpr(expr: Expression): Column = new Column(expr)
+
+  case class GroupUDWF(marker: Expression) extends AggregateWindowFunction {
+    self: Product =>
+    def this() = this(Literal(0))
+
+    override def children: Seq[Expression] = marker :: Nil
+
+    override def dataType: DataType = LongType
+
+    protected val zero = Literal(0L)
+    protected val one = Literal(1L)
+
+    protected val currentGroup = AttributeReference("currentGroup", LongType, nullable = true)()
+
+    override val aggBufferAttributes: Seq[AttributeReference] = currentGroup :: Nil
+
+    override val initialValues: Seq[Expression] = zero :: Nil
+    override val updateExpressions: Seq[Expression] = If(marker, Add(currentGroup, one), currentGroup) :: Nil
+
+    override val evaluateExpression: Expression = aggBufferAttributes(0)
+
+    override def prettyName: String = "sequential_group"
+  }
+
+  def sequentialGroup(marker: Column): Column = withExpr {
+    GroupUDWF(marker.expr)
+  }
 
   def groupEvents(events: Dataset[Event], singlePartition: Boolean): Dataset[GrouppedEvent] = {
 
@@ -151,46 +179,48 @@ object Chronicler {
     val enumeratedEvents: Dataset[GrouppedEvent] = initialEvents unionByName grouppedEvents
 
     val linearChronicles = enumeratedEvents.
-      withColumn("nextTime",
+      repartition(256, col("position")).
+      withColumn("particleId", monotonically_increasing_id()+1).
+      withColumn("parentId",
+        lag("particleId", 1, null)
+          over Window.partitionBy("position").orderBy("eventId")).
+      filter(col("eventKind") =!= LIT_REMOVED).
+      withColumn("deathTime",
         lead("time", 1, Double.PositiveInfinity)
           over Window.partitionBy("position").orderBy("eventId")).
-      withColumn("stationaryParentId",
-        lag("eventId", 1, null)
-          over Window.partitionBy("position").orderBy("eventId")).
-      filter(col("eventKind") =!= LIT_REMOVED)
+      withColumnRenamed("time","birthTime")
 
     linearChronicles
   }
 
-  def withExpr(expr: Expression): Column = new Column(expr)
+  def computeChronicles(linearChronicles: DataFrame): Dataset[ChronicleEntry] = {
 
-  case class GroupUDWF(marker: Expression) extends AggregateWindowFunction {
-    self: Product =>
-    def this() = this(Literal(0))
+    val offspring = linearChronicles.
+      filter(!isnull(col("parentId"))).
+      alias("offspring")
 
-    override def children: Seq[Expression] = marker :: Nil
+    val settlers = linearChronicles.
+      filter(isnull(col("parentId"))).
+      drop("parentId").
+      alias("settlers")
 
-    override def dataType: DataType = LongType
+    val resolvedSettlers = offspring.
+      select("eventId", "parentId").
+      join(settlers, Seq("eventId"), "RIGHT")
 
-    protected val zero = Literal(0L)
-    protected val one = Literal(1L)
+    val chronicles = (resolvedSettlers unionByName offspring).
+      select(
+        col("particleId").as(Encoders.LONG),
+        coalesce(col("parentId"), lit(0L)).as("parentId").as(Encoders.LONG),
+        col("birthTime").as(Encoders.DOUBLE),
+        col("deathTime").as(Encoders.DOUBLE),
+        col("position").as(Encoders.product[Position]),
+        col("mutationId").as(Encoders.LONG),
+        col("mutation").as(Encoders.product[Mutation])
+      ).as(Encoders.product[ChronicleEntry])
 
-    protected val currentGroup = AttributeReference("currentGroup", LongType, nullable = true)()
-
-    override val aggBufferAttributes: Seq[AttributeReference] = currentGroup :: Nil
-
-    override val initialValues: Seq[Expression] = zero :: Nil
-    override val updateExpressions: Seq[Expression] = If(marker, Add(currentGroup, one), currentGroup) :: Nil
-
-    override val evaluateExpression: Expression = aggBufferAttributes(0)
-
-    override def prettyName: String = "sequential_group"
+    chronicles
   }
-
-  def sequentialGroup(marker: Column): Column = withExpr {
-    GroupUDWF(marker.expr)
-  }
-
 
   def main(args: Array[String]) {
 
