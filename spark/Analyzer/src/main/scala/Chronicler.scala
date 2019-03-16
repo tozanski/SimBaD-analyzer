@@ -5,20 +5,22 @@ import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.{Encoders}
+import org.apache.spark.sql.Encoders
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.Column
 import org.apache.spark.sql.catalyst.expressions.{Add, AggregateWindowFunction, AttributeReference, Expression, If, IsNotNull, LessThanOrEqual, Literal, RowNumberLike, ScalaUDF, SizeBasedWindowFunction, Subtract}
 
+import scala.collection.immutable.NumericRange
+
 
 object Chronicler {
-  val LIT_CREATED = struct(lit(1).as("encoded"))
-  val LIT_REMOVED = struct(lit(2).as("encoded"))
-  val LIT_TRANSFORMED = struct(lit(4).as("encoded"))
+  val LIT_CREATED: Column = struct(lit(1).as("encoded"))
+  val LIT_REMOVED: Column = struct(lit(2).as("encoded"))
+  val LIT_TRANSFORMED: Column = struct(lit(4).as("encoded"))
 
   val startingMutationId: Long = 1
   val startingMutation = Mutation(0.1f, 0.5f, 0.1f, 0.5f, 0.9f, 0.5f)
-  val posRange = -2.0f to 2.0f by 1.0f
+  val posRange: NumericRange[Float] = -2.0f to 2.0f by 1.0f
 
   val streamSchema = StructType(Array(
     StructField("position_0", FloatType, nullable=false),
@@ -138,7 +140,7 @@ object Chronicler {
     override val initialValues: Seq[Expression] = zero :: Nil
     override val updateExpressions: Seq[Expression] = If(marker, Add(currentGroup, one), currentGroup) :: Nil
 
-    override val evaluateExpression: Expression = aggBufferAttributes(0)
+    override val evaluateExpression: Expression = aggBufferAttributes.head
 
     override def prettyName: String = "sequential_group"
   }
@@ -236,15 +238,21 @@ object Chronicler {
     spark.sparkContext.setCheckpointDir(pathPrefix + "/checkpoints/")
 
     val events = readEvents(spark, pathPrefix)
-
-    val grouppedEvents = groupEvents(events, true)
+    val groupedEvents = groupEvents(events, singlePartition = true)
     val initialSnapshot: Dataset[Cell] = startingSnapshot(spark)
 
-    val linearChronicles = computeLinearChronicles(initialSnapshot, grouppedEvents)
-
-    linearChronicles.
+    computeLinearChronicles(initialSnapshot, groupedEvents).
       write.
       mode("overwrite").
       parquet(pathPrefix+"/linearChronicles.parquet")
+
+    val linearChronicles = spark.
+      read.
+      parquet(pathPrefix+"linearChronicles.parquet")
+
+    computeChronicles(linearChronicles).
+      write.
+      mode("overwrite").
+      parquet(pathPrefix+"/newChronicles.parquet")
   }
 }
