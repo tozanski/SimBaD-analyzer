@@ -243,7 +243,7 @@ object Chronicler {
 
     val linearChronicles =
       computeLinearChronicles(initialSnapshot, groupedEvents).
-      repartition(col("eventKind")).
+      repartitionByRange(col("eventKind")).
       cache()
 
 //      write.
