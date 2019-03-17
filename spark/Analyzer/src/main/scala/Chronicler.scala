@@ -243,8 +243,9 @@ object Chronicler {
 
     val linearChronicles =
       computeLinearChronicles(initialSnapshot, groupedEvents).
-      repartitionByRange(col("eventKind")).
-      cache()
+      repartitionByRange(col("eventKind"))
+//        .
+//      cache()
 
 //      write.
 //      mode("overwrite").
@@ -252,7 +253,7 @@ object Chronicler {
 //
 //    val linearChronicles = spark.
 //      read.
-//      parquet(pathPrefix+"linearChronicles.parquet")
+//      parquet(pathPrefix+"/linearChronicles.parquet")
 
     computeChronicles(linearChronicles).
       write.
