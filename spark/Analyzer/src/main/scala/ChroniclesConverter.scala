@@ -13,7 +13,7 @@ import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.SparkSession
 
-object Converter {
+object ChroniclesConverter {
   
   def main(args: Array[String]) {
     
