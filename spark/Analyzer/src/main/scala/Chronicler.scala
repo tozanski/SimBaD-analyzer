@@ -1,13 +1,9 @@
 package analyzer
 
-import org.apache.spark.sql.Dataset
-import org.apache.spark.sql.DataFrame
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{Column, DataFrame, Dataset, Encoders, SaveMode, SparkSession}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.Encoders
 import org.apache.spark.sql.expressions.Window
-import org.apache.spark.sql.Column
 import org.apache.spark.sql.catalyst.expressions.{Add, AggregateWindowFunction, AttributeReference, Expression, If, IsNotNull, LessThanOrEqual, Literal, RowNumberLike, ScalaUDF, SizeBasedWindowFunction, Subtract}
 
 import scala.collection.immutable.NumericRange
@@ -248,6 +244,7 @@ object Chronicler {
         computeChronicles(spark, pathPrefix).
           write.
           mode("overwrite").
+          mode(SaveMode.Overwrite).
           parquet(pathPrefix+"/chronicles.parquet")
 
         chronicles = spark.read.parquet(pathPrefix + "/chronicles.parquet").as[ChronicleEntry]

@@ -3,9 +3,11 @@ package analyzer
 import org.apache.spark.sql.Dataset
 import org.apache.spark.sql.Column
 import org.apache.spark.sql.Encoders
-import org.apache.spark.sql.types._
+import org.apache.spark.sql.functions.{col, lit, monotonically_increasing_id, struct}
+import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.functions.{col, lit, struct}
+import org.apache.spark.sql.types._
+
 
 object StreamLoader {
 
@@ -105,18 +107,20 @@ object StreamLoader {
     toEvents(lines)
   }
 
-  def convertOrReadEvents(spark: SparkSession, pathPrefix: String): Dataset[Event] = {
+  def convertOrReadEvents(spark: SparkSession, pathPrefix: String): Dataset[EnumeratedEvent] = {
     import spark.implicits._
-    var events: Dataset[Event] = null
+    var events: Dataset[EnumeratedEvent] = null
     try{
-      events = spark.read.parquet(pathPrefix + "/stream.parquet").as[Event]
+      events = spark.read.parquet(pathPrefix + "/stream.parquet").as[EnumeratedEvent]
     }catch {
       case e: Exception =>
         convertEvents(spark, pathPrefix).
+          withColumn("eventId", monotonically_increasing_id()).
+          as(Encoders.product[EnumeratedEvent]).
           write.
           mode("overwrite").
           parquet(pathPrefix+"/stream.parquet")
-        events = spark.read.parquet(pathPrefix + "/stream.parquet").as[Event]
+        events = spark.read.parquet(pathPrefix + "/stream.parquet").as[EnumeratedEvent]
     }
     events
   }
@@ -133,9 +137,7 @@ object StreamLoader {
       appName("SimBaD stream converter").
       getOrCreate()
     
-    ChronicleLoader.loadEntries( spark, pathPrefix + "/chronicles.csv.gz" ).
-      write.
-      format("parquet").
-      save(pathPrefix+"/chronicles.parquet")
+    StreamLoader.
+      convertOrReadEvents(spark, pathPrefix)
   }
 }

@@ -62,6 +62,16 @@ case class Event(
   mutation: Mutation
 )
 
+case class EnumeratedEvent(
+  eventId: Long,
+  time: Double,
+  timeDelta: Int,
+  eventKind: EventKind,
+  position: Position,
+  mutationId: Long,
+  mutation: Mutation
+)
+
 case class GrouppedEvent(
   time: Double,
   timeDelta: Int,
