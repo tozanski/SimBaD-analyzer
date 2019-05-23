@@ -118,7 +118,7 @@ object StreamLoader {
           withColumn("eventId", monotonically_increasing_id()).
           as(Encoders.product[EnumeratedEvent]).
           write.
-          mode("overwrite").
+          mode(SaveMode.Overwrite).
           parquet(pathPrefix+"/stream.parquet")
         events = spark.read.parquet(pathPrefix + "/stream.parquet").as[EnumeratedEvent]
     }
