@@ -6,7 +6,7 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.functions.{
   col, struct
 }
-import org.apache.spark.sql.{Encoder, Encoders}
+import org.apache.spark.sql.Encoders
 
 object ChronicleLoader{
 
@@ -28,21 +28,21 @@ object ChronicleLoader{
   )
 
   val chronicleSchema = StructType(Array(
-    StructField("id", LongType, false),
-    StructField("parent_id", LongType, false),
-    StructField("birth_time", DoubleType, false),
-    StructField("death_time", DoubleType, false),
-    StructField("position_0", FloatType, false),
-    StructField("position_1", FloatType, false),
-    StructField("position_2", FloatType, false),
-    StructField("mutation_id", LongType, false),
-    StructField("birth_efficiency", FloatType, false),
-    StructField("birth_resistance", FloatType, false),
-    StructField("lifespan_efficiency", FloatType, false),
-    StructField("lifespan_resistance", FloatType, false),
-    StructField("success_efficiency", FloatType, false),
-    StructField("success_resistance", FloatType, false)
-  ));
+    StructField("id", LongType, nullable = false),
+    StructField("parent_id", LongType, nullable = false),
+    StructField("birth_time", DoubleType, nullable = false),
+    StructField("death_time", DoubleType, nullable = false),
+    StructField("position_0", FloatType, nullable = false),
+    StructField("position_1", FloatType, nullable = false),
+    StructField("position_2", FloatType, nullable = false),
+    StructField("mutation_id", LongType, nullable = false),
+    StructField("birth_efficiency", FloatType, nullable = false),
+    StructField("birth_resistance", FloatType, nullable = false),
+    StructField("lifespan_efficiency", FloatType, nullable = false),
+    StructField("lifespan_resistance", FloatType, nullable = false),
+    StructField("success_efficiency", FloatType, nullable = false),
+    StructField("success_resistance", FloatType, nullable = false)
+  ))
 
   def loadLines(spark: SparkSession, path: String) : Dataset[ChronicleLine] = {
     import spark.implicits._
@@ -57,7 +57,7 @@ object ChronicleLoader{
       option("mode","DROPMALFORMED").
       schema(chronicleSchema).
       load(path).
-      as[ChronicleLine];
+      as[ChronicleLine]
   }
   def toEntries( lines: Dataset[ChronicleLine] ): Dataset[ChronicleEntry] = {
     lines.select( 
@@ -91,7 +91,7 @@ object ChronicleLoader{
   def getOrConvertChronicles(spark: SparkSession, pathPrefix: String ): Dataset[ChronicleEntry] = {
     import spark.implicits._
 
-    var chronicleEntries: Dataset[ChronicleEntry] = null;
+    var chronicleEntries: Dataset[ChronicleEntry] = null
     try{
       chronicleEntries = spark.
         read.
@@ -108,6 +108,6 @@ object ChronicleLoader{
           as[ChronicleEntry]
       }
     }
-    return chronicleEntries 
+    chronicleEntries
   }
 }

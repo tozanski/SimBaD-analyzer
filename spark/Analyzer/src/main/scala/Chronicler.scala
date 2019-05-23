@@ -224,6 +224,38 @@ object Chronicler {
     chronicles
   }
 
+  def computeChronicles(spark: SparkSession, pathPrefix: String): Dataset[ChronicleEntry] ={
+    val events = readEvents(spark, pathPrefix)
+    val groupedEvents = groupEvents(events, singlePartition = true)
+    val initialSnapshot: Dataset[Cell] = startingSnapshot(spark)
+
+    val linearChronicles =
+      computeLinearChronicles(initialSnapshot, groupedEvents).
+        repartitionByRange(col("eventKind"))
+
+    computeChronicles(linearChronicles)
+  }
+
+  def computeOrReadChronicles(spark: SparkSession, pathPrefix: String): Dataset[ChronicleEntry] =
+  {
+    import spark.implicits._
+    var chronicles: Dataset[ChronicleEntry] = null
+    try{
+      chronicles = spark.read.parquet(pathPrefix + "/chronicles.parquet").as[ChronicleEntry]
+    }catch {
+      case e: Exception => {
+
+        computeChronicles(spark, pathPrefix).
+          write.
+          mode("overwrite").
+          parquet(pathPrefix+"/chronicles.parquet")
+
+        chronicles = spark.read.parquet(pathPrefix + "/chronicles.parquet").as[ChronicleEntry]
+      }
+    }
+    chronicles
+  }
+
   def main(args: Array[String]) {
 
     if (args.length != 1)
@@ -236,30 +268,6 @@ object Chronicler {
       getOrCreate()
 
     spark.sparkContext.setCheckpointDir(pathPrefix + "/checkpoints/")
-
-    val events = readEvents(spark, pathPrefix)
-    val groupedEvents = groupEvents(events, singlePartition = true)
-    val initialSnapshot: Dataset[Cell] = startingSnapshot(spark)
-
-    val linearChronicles =
-      computeLinearChronicles(initialSnapshot, groupedEvents).
-      repartitionByRange(col("eventKind"))
-//        .
-//      cache()
-
-//      write.
-//      mode("overwrite").
-//      parquet(pathPrefix+"/linearChronicles.parquet")
-//
-//    val linearChronicles = spark.
-//      read.
-//      parquet(pathPrefix+"/linearChronicles.parquet")
-
-    computeChronicles(linearChronicles).
-      write.
-      mode("overwrite").
-      parquet(pathPrefix+"/newChronicles.parquet")
-
-//    linearChronicles.unpersist()
+    computeOrReadChronicles(spark, pathPrefix)
   }
 }
