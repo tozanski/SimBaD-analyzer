@@ -1,13 +1,12 @@
 package analyzer
 
-import org.apache.spark.sql.{Column, DataFrame, Dataset, Encoders, SaveMode, SparkSession}
-import org.apache.spark.sql.types._
-import org.apache.spark.sql.functions._
+import org.apache.spark.sql.catalyst.expressions.{Add, AggregateWindowFunction, AttributeReference, Expression, If, Literal}
 import org.apache.spark.sql.expressions.Window
-import org.apache.spark.sql.catalyst.expressions.{Add, AggregateWindowFunction, AttributeReference, Expression, If, IsNotNull, LessThanOrEqual, Literal, RowNumberLike, ScalaUDF, SizeBasedWindowFunction, Subtract}
+import org.apache.spark.sql.functions._
+import org.apache.spark.sql.types.{DataType, IntegerType, LongType}
+import org.apache.spark.sql._
 
 import scala.collection.immutable.NumericRange
-
 
 object Chronicler {
   val LIT_CREATED: Column = struct(lit(1).as("encoded"))
@@ -60,7 +59,7 @@ object Chronicler {
     GroupUDWF(marker.expr)
   }
 
-  def groupEvents(events: Dataset[Event], singlePartition: Boolean): Dataset[GrouppedEvent] = {
+  def groupEvents(events: Dataset[EnumeratedEvent], singlePartition: Boolean): Dataset[GroupedEvent] = {
 
     val window =
       if (singlePartition)
@@ -69,27 +68,22 @@ object Chronicler {
         Window.partitionBy("time").orderBy("timeOrder")
 
     events.
-      withColumn("timeOrder", monotonically_increasing_id()).
+      //withColumn("timeOrder", monotonically_increasing_id()).
       withColumn("eventId", sequentialGroup(col("timeDelta")===0) over window).
       drop("timeOrder").
-      as(Encoders.product[GrouppedEvent])
+      as(Encoders.product[GroupedEvent])
   }
 
-  def readEvents(spark: SparkSession, pathPrefix: String): Dataset[Event] = {
-    val lines = readEventStreamLines(spark, pathPrefix + "/stream.csv.gz")
-    toEvents(lines)
-  }
+  def computeLinearChronicles(initial: Dataset[Cell], grouppedEvents: Dataset[GroupedEvent]): DataFrame = {
 
-  def computeLinearChronicles(initial: Dataset[Cell], grouppedEvents: Dataset[GrouppedEvent]): DataFrame = {
-
-    val initialEvents: Dataset[GrouppedEvent] = initial.
+    val initialEvents: Dataset[GroupedEvent] = initial.
       withColumn("time", lit(Double.NegativeInfinity)).
       withColumn("timeDelta", monotonically_increasing_id().cast(IntegerType)).
       withColumn("eventKind", LIT_CREATED).
       withColumn("eventId", lit(0L)).
-      as(Encoders.product[GrouppedEvent])
+      as(Encoders.product[GroupedEvent])
 
-    val enumeratedEvents: Dataset[GrouppedEvent] = initialEvents unionByName grouppedEvents
+    val enumeratedEvents: Dataset[GroupedEvent] = initialEvents unionByName grouppedEvents
 
     val linearChronicles = enumeratedEvents.
       repartition(256, col("position")).
@@ -135,8 +129,8 @@ object Chronicler {
     chronicles
   }
 
-  def computeChronicles(spark: SparkSession, pathPrefix: String): Dataset[ChronicleEntry] ={
-    val events = readEvents(spark, pathPrefix)
+  def computeChronicles(spark: SparkSession, events: Dataset[EnumeratedEvent], pathPrefix: String): Dataset[ChronicleEntry] ={
+    //val events = StreamLoader.readEvents(spark, pathPrefix)
     val groupedEvents = groupEvents(events, singlePartition = true)
     val initialSnapshot: Dataset[Cell] = startingSnapshot(spark)
 
@@ -156,7 +150,8 @@ object Chronicler {
     }catch {
       case e: Exception => {
 
-        computeChronicles(spark, pathPrefix).
+        val events = StreamLoader.convertOrReadEvents(spark, pathPrefix)
+        computeChronicles(spark, events, pathPrefix).
           write.
           mode("overwrite").
           mode(SaveMode.Overwrite).

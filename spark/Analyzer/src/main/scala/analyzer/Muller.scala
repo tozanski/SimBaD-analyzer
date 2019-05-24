@@ -1,17 +1,8 @@
 package analyzer
 
-import org.apache.spark.graphx.Graph
-import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.DataFrame
-import org.apache.spark.sql.Dataset
-
-import org.apache.spark.sql.functions.{
-  cume_dist, col, count, explode, lit, when,monotonically_increasing_id
-}
-import org.apache.spark.sql.{Encoder, Encoders}
-
 import org.apache.spark.sql.expressions.Window
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.functions._
+import org.apache.spark.sql.{Dataset, Encoders, SparkSession}
 
 object Muller{
   def mullerOrder(lineages: Dataset[Ancestry] ): Dataset[(Long,Long)] = {
@@ -51,8 +42,8 @@ object Muller{
       as[(Long,Long)]
   }
 
-  def mullerData( spark: SparkSession, 
-                  chronicles: Dataset[ChronicleEntry], 
+  def mullerData( spark: SparkSession,
+                  chronicles: Dataset[ChronicleEntry],
                   lineages: Dataset[Ancestry],
                   maxTime: Double,
                   minCellCount: Long ): Dataset[(Long, Double, Double)] = {
@@ -68,21 +59,21 @@ object Muller{
       withColumn("aggMutationId", when($"mutationSize" < 1000, 0l).otherwise($"mutationId")).
       withColumn("timePoint", explode(Snapshots.snapshotsUdf(maxTime)(col("birthTime"), col("deathTime")))).
       select(
-        $"aggMutationId".alias("mutationId").as[Long], 
+        $"aggMutationId".alias("mutationId").as[Long],
         $"timePoint".as[Double])
 
     val orderedMutations: Dataset[(Long, Long)] = mullerOrder(lineages)
 
     val mullerCumulatives = snapshots.
       join(orderedMutations,Seq("mutationId"), "left").
-      withColumn("cumeDist", 
+      withColumn("cumeDist",
         cume_dist over Window.partitionBy("timePoint").orderBy("ordering")).
       dropDuplicates.
       orderBy("ordering","timePoint").
       drop("ordering").
       as[(Long, Double, Double)]
 
-    mullerCumulatives  
+    mullerCumulatives
   }
 
   def mullerPlotSnapshot(snapshot: Dataset[Cell], mutationOrder: Dataset[(Long, Long)]): Dataset[(Long, Long)] = {
@@ -90,7 +81,7 @@ object Muller{
       groupBy("mutationId").
       agg(count(lit(1)).alias("count")).
       join(mutationOrder, Seq("mutationId"), "left").
-      withColumn("cumeDist", 
+      withColumn("cumeDist",
         cume_dist over Window.orderBy("ordering")).
       as(Encoders.product[(Long,Long)])
   }

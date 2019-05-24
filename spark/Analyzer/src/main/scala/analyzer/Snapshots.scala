@@ -1,21 +1,11 @@
 package analyzer
 
-import org.apache.spark.sql.Dataset
-import org.apache.spark.sql.DataFrame
-
-import org.apache.spark.sql.functions.{
-  avg, col, count, explode, first, hypot, lit, max, stddev, udf
-}
-
-import org.apache.spark.sql.DataFrame
-import org.apache.spark.sql.SaveMode
-import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.{Encoder, Encoders}
-
+import org.apache.spark.sql.functions._
+import org.apache.spark.sql.{DataFrame, Dataset, Encoders, SparkSession}
 
 object Snapshots{
-  def snapshotsUdf(maxTime: Double) = udf( 
-      (t1:Double, t2:Double) => (0d to maxTime by 1).filter( t => t1 <= t && t < t2 ) 
+  def snapshotsUdf(maxTime: Double) = udf(
+      (t1:Double, t2:Double) => (0d to maxTime by 1).filter( t => t1 <= t && t < t2 )
     )
 
   def getSnapshots( chronicles: Dataset[ChronicleEntry], maxTime: Double ): DataFrame = {
@@ -26,44 +16,43 @@ object Snapshots{
     chronicles.
       filter(col("birthTime") <= lit(timePoint) && lit(timePoint) < col("deathTime") ).
       select(
-        col("position").as(Encoders.product[Position]), 
-        col("mutationId").as(Encoders.LONG), 
+        col("position").as(Encoders.product[Position]),
+        col("mutationId").as(Encoders.LONG),
         col("mutation").as(Encoders.product[Mutation])).
       as(Encoders.product[Cell])
   }
-  case class CellStats( 
+  case class CellStats(
     count: Long, max_origin_distance: Double,
-    mean_birth_efficiency: Double, mean_birth_resistance: Double, 
+    mean_birth_efficiency: Double, mean_birth_resistance: Double,
     mean_lifespan_efficiency: Double, mean_lifespan_resistance: Double,
     mean_success_efficiency: Double, mean_success_resistance: Double,
 
-    stddev_birth_efficiency: Double, stddev_birth_resistance: Double, 
+    stddev_birth_efficiency: Double, stddev_birth_resistance: Double,
     stddev_lifespan_efficiency: Double, stddev_lifespan_resistance: Double,
     stddev_success_efficiency: Double, stddev_success_resistance: Double
   )
 
   def getTimeStats( spark: SparkSession, cells: Dataset[Cell] ): Dataset[CellStats] = {
-    import spark.implicits._
-    
+
     cells.
       agg(
-        count(lit(1)).alias("count"), 
+        count(lit(1)).alias("count"),
         max(hypot(hypot("position.x", "position.y"), "position.z")).alias("max_origin_distance"),
 
         // means
-        avg("mutation.birthEfficiency").alias("mean_birth_efficiency"), 
-        avg("mutation.birthResistance").alias("mean_birth_resistance"), 
-        avg("mutation.lifespanEfficiency").alias("mean_lifespan_efficiency"), 
-        avg("mutation.lifespanResistance").alias("mean_lifespan_resistance"), 
-        avg("mutation.successEfficiency").alias("mean_success_efficiency"), 
+        avg("mutation.birthEfficiency").alias("mean_birth_efficiency"),
+        avg("mutation.birthResistance").alias("mean_birth_resistance"),
+        avg("mutation.lifespanEfficiency").alias("mean_lifespan_efficiency"),
+        avg("mutation.lifespanResistance").alias("mean_lifespan_resistance"),
+        avg("mutation.successEfficiency").alias("mean_success_efficiency"),
         avg("mutation.successResistance").alias("mean_success_resistance"),
 
         // stdev
-        stddev("mutation.birthEfficiency").alias("stddev_birth_efficiency"), 
-        stddev("mutation.birthResistance").alias("stddev_birth_resistance"), 
-        stddev("mutation.lifespanEfficiency").alias("stddev_lifespan_efficiency"), 
-        stddev("mutation.lifespanResistance").alias("stddev_lifespan_resistance"), 
-        stddev("mutation.successEfficiency").alias("stddev_success_efficiency"), 
+        stddev("mutation.birthEfficiency").alias("stddev_birth_efficiency"),
+        stddev("mutation.birthResistance").alias("stddev_birth_resistance"),
+        stddev("mutation.lifespanEfficiency").alias("stddev_lifespan_efficiency"),
+        stddev("mutation.lifespanResistance").alias("stddev_lifespan_resistance"),
+        stddev("mutation.successEfficiency").alias("stddev_success_efficiency"),
         stddev("mutation.successResistance").alias("stddev_success_resistance")
       ).as(Encoders.product[CellStats])
   }
@@ -78,24 +67,24 @@ object Snapshots{
       snapshots.
         groupBy("timePoint","mutationId").
         agg(
-          count(lit(1)), 
-          first("mutation.birthEfficiency").alias("birth_efficiency"), 
-          first("mutation.birthResistance").alias("birth_resistance"), 
-          first("mutation.lifespanEfficiency").alias("lifespan_efficiency"), 
-          first("mutation.lifespanResistance").alias("lifespan_resistance"), 
-          first("mutation.successEfficiency").alias("success_efficiency"), 
+          count(lit(1)),
+          first("mutation.birthEfficiency").alias("birth_efficiency"),
+          first("mutation.birthResistance").alias("birth_resistance"),
+          first("mutation.lifespanEfficiency").alias("lifespan_efficiency"),
+          first("mutation.lifespanResistance").alias("lifespan_resistance"),
+          first("mutation.successEfficiency").alias("success_efficiency"),
           first("mutation.successResistance").alias("success_resistance")
         )
   }
-  
+
   def getFinal( chronicleEntries: Dataset[ChronicleEntry]): DataFrame = {
     // final
     chronicleEntries.filter( col("deathTime") === Double.PositiveInfinity ).
       select(
-        "position.x", "position.y", "position.z", 
+        "position.x", "position.y", "position.z",
         "mutationId",
-        "mutation.birthEfficiency", "mutation.birthResistance", 
-        "mutation.lifespanEfficiency", "mutation.lifespanResistance", 
+        "mutation.birthEfficiency", "mutation.birthResistance",
+        "mutation.lifespanEfficiency", "mutation.lifespanResistance",
         "mutation.successEfficiency", "mutation.successResistance"
       )
   }
@@ -103,7 +92,7 @@ object Snapshots{
   def getFinalSimpleMutationHistogram( finalConfiguration: DataFrame ): DataFrame = {
     finalConfiguration.groupBy("mutationId").count().orderBy("mutationId")
   }
-  
+
   def writeSnapshots( chronicles: Dataset[ChronicleEntry], pathPrefix: String, maxTime: Double ) = {
     // snapshots
     for( t <- (0d to maxTime by 1d) ){
@@ -115,7 +104,7 @@ object Snapshots{
       option("delimiter",";").
       option("header", "true").
       mode("overwrite").
-      save(pathPrefix + "/snapshots/" + t.toString() )  
+      save(pathPrefix + "/snapshots/" + t.toString() )
     }
   }
 }

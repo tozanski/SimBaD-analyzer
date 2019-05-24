@@ -1,12 +1,8 @@
 package analyzer
 
-import org.apache.spark.sql.Dataset
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.functions.{col, struct}
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.functions.{
-  col, struct
-}
-import org.apache.spark.sql.Encoders
+import org.apache.spark.sql.{Dataset, Encoders, SparkSession}
 
 object ChronicleLoader{
 
@@ -46,7 +42,7 @@ object ChronicleLoader{
 
   def loadLines(spark: SparkSession, path: String) : Dataset[ChronicleLine] = {
     import spark.implicits._
-    
+
     spark.
       read.
       format("csv").
@@ -60,7 +56,7 @@ object ChronicleLoader{
       as[ChronicleLine]
   }
   def toEntries( lines: Dataset[ChronicleLine] ): Dataset[ChronicleEntry] = {
-    lines.select( 
+    lines.select(
       struct(
         col("id").as(Encoders.LONG).as("particleId"),
         col("parent_id").as(Encoders.LONG).as("parentId"),
@@ -68,7 +64,7 @@ object ChronicleLoader{
         col("death_time").as(Encoders.DOUBLE).as("deathTime"),
         struct(
           col("position_0").as(Encoders.FLOAT).alias("x"),
-          col("position_1").as(Encoders.FLOAT).alias("y"), 
+          col("position_1").as(Encoders.FLOAT).alias("y"),
           col("position_2").as(Encoders.FLOAT).alias("z")
         ).as("position").as(Encoders.product[Position]),
         col("mutation_id").as(Encoders.LONG).as("mutationId"),
@@ -81,7 +77,7 @@ object ChronicleLoader{
           col("success_resistance").as(Encoders.FLOAT).alias("successResistance")
         ).as("mutation").as(Encoders.product[Mutation])
       ).as(Encoders.product[ChronicleEntry])
-    )    
+    )
   }
 
   def loadEntries(spark: SparkSession, path: String) : Dataset[ChronicleEntry] = {

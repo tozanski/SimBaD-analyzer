@@ -1,13 +1,12 @@
 package analyzer
 
-import org.apache.spark.sql.Dataset
-import org.apache.spark.sql.Column
-import org.apache.spark.sql.Encoders
-import org.apache.spark.sql.functions.{col, lit, monotonically_increasing_id, struct}
-import org.apache.spark.sql.SaveMode
-import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.types._
+import analyzer.expression.functions.sequentialGroup
 
+import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.expressions.Window
+import org.apache.spark.sql.functions.{col, lit, monotonically_increasing_id, struct}
+import org.apache.spark.sql.types._
+import org.apache.spark.sql.{Column, Dataset, Encoders, SparkSession, SaveMode }
 
 object StreamLoader {
 
@@ -102,7 +101,7 @@ object StreamLoader {
     )
   }
 
-  def convertEvents(spark: SparkSession, pathPrefix: String): Dataset[Event] = {
+  def readEvents(spark: SparkSession, pathPrefix: String): Dataset[Event] = {
     val lines = readEventStreamLines(spark, pathPrefix + "/stream.csv.gz")
     toEvents(lines)
   }
@@ -114,8 +113,8 @@ object StreamLoader {
       events = spark.read.parquet(pathPrefix + "/stream.parquet").as[EnumeratedEvent]
     }catch {
       case e: Exception =>
-        convertEvents(spark, pathPrefix).
-          withColumn("eventId", monotonically_increasing_id()).
+        readEvents(spark, pathPrefix).
+          withColumn("timeOrder", monotonically_increasing_id()).
           as(Encoders.product[EnumeratedEvent]).
           write.
           mode(SaveMode.Overwrite).
@@ -125,19 +124,44 @@ object StreamLoader {
     events
   }
 
+  def withExpr(expr: Expression): Column = new Column(expr)
+
+  def groupEvents(events: Dataset[Event], singlePartition: Boolean): Dataset[GroupedEvent] = {
+
+    val window =
+      if (singlePartition)
+        Window.orderBy("timeOrder")
+      else
+        Window.partitionBy("time").orderBy("timeOrder")
+
+    events.
+      withColumn("timeOrder", monotonically_increasing_id()).
+      withColumn("eventId", sequentialGroup(col("timeDelta")===0) over window).
+      drop("timeOrder").
+      as(Encoders.product[GroupedEvent])
+  }
+
+  def readGroupedEvents(spark: SparkSession, pathPrefix: String): Dataset[GroupedEvent] = {
+    val events = readEvents(spark, pathPrefix)
+    groupEvents(events, singlePartition = true)
+  }
+
   def main(args: Array[String]) {
-    
+
     if( args.length != 1 )
       throw new RuntimeException("no prefix path given")
-    
-    args.foreach( println )
+
+    //args.foreach( println )
     val pathPrefix = args(0)
 
     val spark = SparkSession.builder.
       appName("SimBaD stream converter").
       getOrCreate()
-    
-    StreamLoader.
-      convertOrReadEvents(spark, pathPrefix)
+
+    readGroupedEvents(spark, pathPrefix).
+      as(Encoders.product[GroupedEvent]).
+      write.
+      mode(SaveMode.Overwrite).
+      parquet(pathPrefix+"/grouped_events.parquet")
   }
 }

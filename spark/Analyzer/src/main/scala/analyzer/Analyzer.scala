@@ -1,17 +1,8 @@
 package analyzer
 
+import org.apache.spark.sql.functions.{count, lit, max}
+import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
 import org.apache.spark.storage.StorageLevel
-
-import org.apache.spark.sql.SQLContext
-
-import org.apache.spark.sql.Dataset
-import org.apache.spark.sql.DataFrame
-import org.apache.spark.sql.SaveMode
-import org.apache.spark.sql.SparkSession
-
-import org.apache.spark.sql.functions.{
-  col, count, lit, max
-}
 
 object Analyzer {
   def getMaxTime( chronicles: Dataset[ChronicleEntry] ): Double = {
@@ -32,12 +23,12 @@ object Analyzer {
   }
 
   def main(args: Array[String]) {
-    
+
     if( args.length != 1 )
       throw new RuntimeException("no prefix path given");
-    
+
     val pathPrefix = args(0);
- 
+
     val spark = SparkSession.builder.
       appName("SimBaD analyzer").
       getOrCreate()
@@ -45,11 +36,11 @@ object Analyzer {
     spark.sparkContext.setCheckpointDir(pathPrefix + "/checkpoints/")
 
     import spark.implicits._
-    
+
     val chronicles = ChronicleLoader.getOrConvertChronicles(spark, pathPrefix)
-  
+
     spark.sparkContext.setJobGroup("max Time", "computing maximum time")
-    val maxTime =  getMaxTime(chronicles);    
+    val maxTime =  getMaxTime(chronicles);
     println("MAX TIME %s".format(maxTime));
 
     val largeMutations: Dataset[Long] = chronicles.
@@ -59,10 +50,10 @@ object Analyzer {
       select($"mutationId".as[Long]).
       persist(StorageLevel.MEMORY_AND_DISK)
 
-    val mutationTree = Phylogeny.getOrComputeMutationTree(spark, pathPrefix, chronicles)      
+    val mutationTree = Phylogeny.getOrComputeMutationTree(spark, pathPrefix, chronicles)
     val lineages = Phylogeny.getOrComputeLineages(spark, pathPrefix, mutationTree)
 
-    val largeMullerOrder = Muller.mullerOrder( 
+    val largeMullerOrder = Muller.mullerOrder(
       lineages.
         join(largeMutations,"mutationId").
         as[Ancestry]

@@ -63,7 +63,7 @@ case class Event(
 )
 
 case class EnumeratedEvent(
-  eventId: Long,
+  timeOrder: Long,
   time: Double,
   timeDelta: Int,
   eventKind: EventKind,
@@ -72,7 +72,7 @@ case class EnumeratedEvent(
   mutation: Mutation
 )
 
-case class GrouppedEvent(
+case class GroupedEvent(
   time: Double,
   timeDelta: Int,
   eventId: Long,
