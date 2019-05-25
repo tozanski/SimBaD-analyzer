@@ -3,7 +3,7 @@ package analyzer
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.{Dataset, Encoders, SparkSession}
 import org.apache.spark.storage.StorageLevel
-
+/*
 object Phylogeny  {
   def mutationTree(chronicles: Dataset[ChronicleEntry]): Dataset[MutationTreeLink] = {
 
@@ -156,7 +156,7 @@ object Phylogeny  {
     return lineages
   }
 
-  def main(args: Array[String]) = {
+  def main_(args: Array[String]) = {
     if( args.length != 1 )
       throw new RuntimeException("no prefix path given");
 
@@ -181,3 +181,4 @@ object Phylogeny  {
       true);
   }
 }
+*/

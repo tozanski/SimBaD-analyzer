@@ -3,7 +3,7 @@ package analyzer
 import org.apache.spark.sql.functions.{count, lit, max}
 import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
 import org.apache.spark.storage.StorageLevel
-
+/*
 object Analyzer {
   def getMaxTime( chronicles: Dataset[ChronicleEntry] ): Double = {
     chronicles.agg( max("birthTime") ).collect()(0).getDouble(0);
@@ -22,7 +22,7 @@ object Analyzer {
       save(path)
   }
 
-  def main(args: Array[String]) {
+  def s_main(args: Array[String]) {
 
     if( args.length != 1 )
       throw new RuntimeException("no prefix path given");
@@ -84,3 +84,4 @@ object Analyzer {
     }
   }
 }
+*/

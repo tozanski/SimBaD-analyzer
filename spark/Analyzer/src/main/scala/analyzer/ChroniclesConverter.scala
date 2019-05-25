@@ -1,10 +1,10 @@
 package analyzer
 
 import org.apache.spark.sql.SparkSession
-
+/*
 object ChroniclesConverter {
 
-  def main(args: Array[String]) {
+  def main_(args: Array[String]) {
 
     if( args.length != 1 )
       throw new RuntimeException("no prefix path given");
@@ -22,3 +22,4 @@ object ChroniclesConverter {
       save(pathPrefix+"/chronicles.parquet")
   }
 }
+*/

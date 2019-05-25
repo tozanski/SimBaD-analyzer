@@ -1,19 +1,14 @@
 package analyzer
 
-import analyzer.expression.functions.sequentialGroup
+import analyzer.expression.functions.{partition_id, sequentialGroup}
 
-import org.apache.spark.sql.catalyst.expressions.Expression
+
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions.{col, lit, monotonically_increasing_id, struct}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{Column, Dataset, Encoders, SparkSession, SaveMode }
 
-object StreamLoader {
-
-  val LIT_CREATED: Column = struct(lit(1).as("encoded"))
-  val LIT_REMOVED: Column = struct(lit(2).as("encoded"))
-  val LIT_TRANSFORMED: Column = struct(lit(4).as("encoded"))
-
+object StreamReader {
   val streamSchema = StructType(Array(
     StructField("position_0", FloatType, nullable=false),
     StructField("position_1", FloatType, nullable=false),
@@ -75,6 +70,15 @@ object StreamLoader {
       as(Encoders.product[StreamLine])
   }
 
+  def readEventStreamLinesParquet(spark: SparkSession, pathPrefix: String): Dataset[StreamLine] = {
+    spark.
+      read.
+      format("parquet").
+      schema(streamSchema).
+      load(pathPrefix+"/stream.parquet").
+      as(Encoders.product[StreamLine])
+  }
+
   def toEvents(lines: Dataset[StreamLine]): Dataset[Event] = {
     lines.select(
       struct(
@@ -106,11 +110,20 @@ object StreamLoader {
     toEvents(lines)
   }
 
-  def convertOrReadEvents(spark: SparkSession, pathPrefix: String): Dataset[EnumeratedEvent] = {
+  def readEnumeratedEvents(spark: SparkSession, pathPrefix: String): Dataset[EnumeratedEvent] = {
+    readEvents(spark, pathPrefix).
+      withColumn("timeOrder", monotonically_increasing_id()).
+      as(Encoders.product[EnumeratedEvent])
+  }
+
+
+  def createOrReadEnumeratedEvents(spark: SparkSession, pathPrefix: String): Dataset[EnumeratedEvent] = {
     import spark.implicits._
+    val outputName = pathPrefix + "/events.parquet"
+
     var events: Dataset[EnumeratedEvent] = null
     try{
-      events = spark.read.parquet(pathPrefix + "/stream.parquet").as[EnumeratedEvent]
+      events = spark.read.parquet(outputName).as[EnumeratedEvent]
     }catch {
       case e: Exception =>
         readEvents(spark, pathPrefix).
@@ -118,33 +131,12 @@ object StreamLoader {
           as(Encoders.product[EnumeratedEvent]).
           write.
           mode(SaveMode.Overwrite).
-          parquet(pathPrefix+"/stream.parquet")
-        events = spark.read.parquet(pathPrefix + "/stream.parquet").as[EnumeratedEvent]
+          parquet(outputName)
+        events = spark.read.parquet(outputName).as[EnumeratedEvent]
     }
     events
   }
 
-  def withExpr(expr: Expression): Column = new Column(expr)
-
-  def groupEvents(events: Dataset[Event], singlePartition: Boolean): Dataset[GroupedEvent] = {
-
-    val window =
-      if (singlePartition)
-        Window.orderBy("timeOrder")
-      else
-        Window.partitionBy("time").orderBy("timeOrder")
-
-    events.
-      withColumn("timeOrder", monotonically_increasing_id()).
-      withColumn("eventId", sequentialGroup(col("timeDelta")===0) over window).
-      drop("timeOrder").
-      as(Encoders.product[GroupedEvent])
-  }
-
-  def readGroupedEvents(spark: SparkSession, pathPrefix: String): Dataset[GroupedEvent] = {
-    val events = readEvents(spark, pathPrefix)
-    groupEvents(events, singlePartition = true)
-  }
 
   def main(args: Array[String]) {
 
@@ -158,10 +150,25 @@ object StreamLoader {
       appName("SimBaD stream converter").
       getOrCreate()
 
-    readGroupedEvents(spark, pathPrefix).
-      as(Encoders.product[GroupedEvent]).
+
+    readEventStreamLines(spark, pathPrefix).
       write.
       mode(SaveMode.Overwrite).
-      parquet(pathPrefix+"/grouped_events.parquet")
+      parquet(pathPrefix+"/stream.parquet")
+
+
+    //createOrReadEnumeratedEvents(spark, pathPrefix)
+/*
+    readEventStreamLines(spark, pathPrefix + "/stream.csv.gz").
+      repartitionByRange(col("event_time")).
+      withColumn("partitionId", partition_id()).
+      write.
+      mode(SaveMode.Overwrite).
+      format("csv").
+      option("delimiter", ";").
+      option("header", true).
+      save(pathPrefix+"/partitioned_events.csv")*/
+
+    scala.io.StdIn.readLine()
   }
 }

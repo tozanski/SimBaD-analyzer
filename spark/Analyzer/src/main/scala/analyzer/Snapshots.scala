@@ -2,7 +2,7 @@ package analyzer
 
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.{DataFrame, Dataset, Encoders, SparkSession}
-
+/*
 object Snapshots{
   def snapshotsUdf(maxTime: Double) = udf(
       (t1:Double, t2:Double) => (0d to maxTime by 1).filter( t => t1 <= t && t < t2 )
@@ -108,3 +108,4 @@ object Snapshots{
     }
   }
 }
+*/

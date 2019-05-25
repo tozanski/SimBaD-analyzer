@@ -4,7 +4,7 @@ import org.apache.spark.sql.catalyst.expressions.{Add, AggregateWindowFunction, 
 import org.apache.spark.sql.types.{DataType, LongType}
 
 
-case class GroupByMarker(marker: Expression) extends AggregateWindowFunction {
+case class SequentialGroup(marker: Expression) extends AggregateWindowFunction {
   self: Product =>
   def this() = this(Literal(0))
 

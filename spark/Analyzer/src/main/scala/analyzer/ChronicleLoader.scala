@@ -3,7 +3,7 @@ package analyzer
 import org.apache.spark.sql.functions.{col, struct}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{Dataset, Encoders, SparkSession}
-
+/*
 object ChronicleLoader{
 
   case class ChronicleLine(
@@ -107,3 +107,4 @@ object ChronicleLoader{
     chronicleEntries
   }
 }
+*/

@@ -1,5 +1,7 @@
 package analyzer
 
+import analyzer.expression.functions.sequentialGroup
+
 import org.apache.spark.sql.catalyst.expressions.{Add, AggregateWindowFunction, AttributeReference, Expression, If, Literal}
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions._
@@ -9,6 +11,9 @@ import org.apache.spark.sql._
 import scala.collection.immutable.NumericRange
 
 object Chronicler {
+
+  val PARTITION_MASK_SHIFT = 33
+
   val LIT_CREATED: Column = struct(lit(1).as("encoded"))
   val LIT_REMOVED: Column = struct(lit(2).as("encoded"))
   val LIT_TRANSFORMED: Column = struct(lit(4).as("encoded"))
@@ -30,51 +35,23 @@ object Chronicler {
     starting.toDS
   }
 
-  def withExpr(expr: Expression): Column = new Column(expr)
+  def groupEventsDF(events: Dataset[Event]): DataFrame /*Dataset[GroupedEvent]*/ = {
 
-  case class GroupUDWF(marker: Expression) extends AggregateWindowFunction {
-    self: Product =>
-    def this() = this(Literal(0))
-
-    override def children: Seq[Expression] = marker :: Nil
-
-    override def dataType: DataType = LongType
-
-    protected val zero = Literal(0L)
-    protected val one = Literal(1L)
-
-    protected val currentGroup = AttributeReference("currentGroup", LongType, nullable = true)()
-
-    override val aggBufferAttributes: Seq[AttributeReference] = currentGroup :: Nil
-
-    override val initialValues: Seq[Expression] = zero :: Nil
-    override val updateExpressions: Seq[Expression] = If(marker, Add(currentGroup, one), currentGroup) :: Nil
-
-    override val evaluateExpression: Expression = aggBufferAttributes.head
-
-    override def prettyName: String = "sequential_group"
-  }
-
-  def sequentialGroup(marker: Column): Column = withExpr {
-    GroupUDWF(marker.expr)
-  }
-
-  def groupEvents(events: Dataset[EnumeratedEvent], singlePartition: Boolean): Dataset[GroupedEvent] = {
-
-    val window =
-      if (singlePartition)
-        Window.orderBy("timeOrder")
-      else
-        Window.partitionBy("time").orderBy("timeOrder")
-
+    val windowSpec = Window.partitionBy("partitionId").orderBy("timeOrder")
     events.
-      //withColumn("timeOrder", monotonically_increasing_id()).
-      withColumn("eventId", sequentialGroup(col("timeDelta")===0) over window).
-      drop("timeOrder").
-      as(Encoders.product[GroupedEvent])
+      withColumn("timeOrder", monotonically_increasing_id()).
+      repartitionByRange(col("time")).
+      sortWithinPartitions("timeOrder").
+      withColumn("partitionId", spark_partition_id().cast(LongType)).
+      withColumn("eventId",
+       sequentialGroup(col("timeDelta")===0).over(windowSpec) + shiftLeft(col("partitionId"), PARTITION_MASK_SHIFT)
+    )
+  }
+  def groupEvents(events: Dataset[Event]): Dataset[GroupedEvent] = {
+    groupEventsDF(events).drop("timeOrder","partitionId").as(Encoders.product[GroupedEvent])
   }
 
-  def computeLinearChronicles(initial: Dataset[Cell], grouppedEvents: Dataset[GroupedEvent]): DataFrame = {
+  def computeLinearChronicles(initial: Dataset[Cell], groupedEvents: Dataset[GroupedEvent]): DataFrame = {
 
     val initialEvents: Dataset[GroupedEvent] = initial.
       withColumn("time", lit(Double.NegativeInfinity)).
@@ -83,7 +60,7 @@ object Chronicler {
       withColumn("eventId", lit(0L)).
       as(Encoders.product[GroupedEvent])
 
-    val enumeratedEvents: Dataset[GroupedEvent] = initialEvents unionByName grouppedEvents
+    val enumeratedEvents: Dataset[GroupedEvent] = initialEvents unionByName groupedEvents
 
     val linearChronicles = enumeratedEvents.
       repartition(256, col("position")).
@@ -99,7 +76,7 @@ object Chronicler {
 
     linearChronicles
   }
-
+/*
   def computeChronicles(linearChronicles: DataFrame): Dataset[ChronicleEntry] = {
 
     val offspring = linearChronicles.
@@ -161,7 +138,7 @@ object Chronicler {
       }
     }
     chronicles
-  }
+  }*/
 
   def main(args: Array[String]) {
 
@@ -175,6 +152,23 @@ object Chronicler {
       getOrCreate()
 
     spark.sparkContext.setCheckpointDir(pathPrefix + "/checkpoints/")
-    computeOrReadChronicles(spark, pathPrefix)
+
+    val stream = StreamReader.readEventStreamLinesParquet(spark, pathPrefix)
+    val events = StreamReader.toEvents(stream)
+    val groupedEvents = groupEvents(events)
+    val counts = groupedEvents.groupBy("position").count()
+
+    counts.explain(true)
+    //counts.describe("position", "count").show()
+    counts.orderBy(desc("count")).show(200)
+      /*
+      write.
+      mode(SaveMode.Overwrite).
+      format("csv").
+      option("delimiter", ";").
+      option("header", true).
+      save(pathPrefix+"/grouped_events.csv")*/
+
+    scala.io.StdIn.readLine()
   }
 }

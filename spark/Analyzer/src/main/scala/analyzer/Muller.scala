@@ -3,7 +3,7 @@ package analyzer
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.{Dataset, Encoders, SparkSession}
-
+/*
 object Muller{
   def mullerOrder(lineages: Dataset[Ancestry] ): Dataset[(Long,Long)] = {
 
@@ -86,3 +86,4 @@ object Muller{
       as(Encoders.product[(Long,Long)])
   }
 }
+*/
