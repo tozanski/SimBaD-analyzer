@@ -76,7 +76,7 @@ object Chronicler {
 
     linearChronicles
   }
-/*
+
   def computeChronicles(linearChronicles: DataFrame): Dataset[ChronicleEntry] = {
 
     val offspring = linearChronicles.
@@ -105,7 +105,7 @@ object Chronicler {
 
     chronicles
   }
-
+/*
   def computeChronicles(spark: SparkSession, events: Dataset[EnumeratedEvent], pathPrefix: String): Dataset[ChronicleEntry] ={
     //val events = StreamLoader.readEvents(spark, pathPrefix)
     val groupedEvents = groupEvents(events, singlePartition = true)

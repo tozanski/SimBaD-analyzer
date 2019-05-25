@@ -169,6 +169,6 @@ object StreamReader {
       option("header", true).
       save(pathPrefix+"/partitioned_events.csv")*/
 
-    scala.io.StdIn.readLine()
+    //scala.io.StdIn.readLine()
   }
 }
