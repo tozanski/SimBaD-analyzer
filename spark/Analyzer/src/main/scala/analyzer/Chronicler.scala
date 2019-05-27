@@ -1,12 +1,12 @@
 package analyzer
 
 import analyzer.expression.functions.sequentialGroup
-
 import org.apache.spark.sql.catalyst.expressions.{Add, AggregateWindowFunction, AttributeReference, Expression, If, Literal}
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types.{DataType, IntegerType, LongType}
 import org.apache.spark.sql._
+import org.apache.spark.storage.StorageLevel
 
 import scala.collection.immutable.NumericRange
 
@@ -106,14 +106,16 @@ object Chronicler {
     chronicles
   }
 /*
-  def computeChronicles(spark: SparkSession, events: Dataset[EnumeratedEvent], pathPrefix: String): Dataset[ChronicleEntry] ={
-    //val events = StreamLoader.readEvents(spark, pathPrefix)
-    val groupedEvents = groupEvents(events, singlePartition = true)
+  def computeChronicles(spark: SparkSession,
+                        groupedEvents: Dataset[GroupedEvent],
+                        pathPrefix: String):
+  Dataset[ChronicleEntry] = {
+
     val initialSnapshot: Dataset[Cell] = startingSnapshot(spark)
 
     val linearChronicles =
       computeLinearChronicles(initialSnapshot, groupedEvents).
-        repartitionByRange(col("eventKind"))
+        repartitionByRange(col("eventKind")).checkpoint(eager=true)
 
     computeChronicles(linearChronicles)
   }
@@ -156,19 +158,28 @@ object Chronicler {
     val stream = StreamReader.readEventStreamLinesParquet(spark, pathPrefix)
     val events = StreamReader.toEvents(stream)
     val groupedEvents = groupEvents(events)
-    val counts = groupedEvents.groupBy("position").count()
+    val linearChronicles = computeLinearChronicles(startingSnapshot(spark), groupedEvents).
+      //repartitionByRange(col("eventId")).
+      //sort(col("eventId")).
+      persist()
 
-    counts.explain(true)
-    //counts.describe("position", "count").show()
-    counts.orderBy(desc("count")).show(200)
-      /*
+    val chronicles = computeChronicles(linearChronicles)
+
+    chronicles.
+      write.
+      mode(SaveMode.Overwrite).
+      parquet(pathPrefix + "/chronicles.parquet")
+    /*
+    chronicles.
       write.
       mode(SaveMode.Overwrite).
       format("csv").
       option("delimiter", ";").
       option("header", true).
-      save(pathPrefix+"/grouped_events.csv")*/
+      save(pathPrefix+"/chronicles.csv")
+*/
+    //scala.io.StdIn.readLine()
 
-    scala.io.StdIn.readLine()
+    linearChronicles.unpersist()
   }
 }
