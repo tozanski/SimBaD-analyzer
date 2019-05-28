@@ -105,19 +105,16 @@ object Chronicler {
 
     chronicles
   }
-/*
-  def computeChronicles(spark: SparkSession,
-                        groupedEvents: Dataset[GroupedEvent],
-                        pathPrefix: String):
-  Dataset[ChronicleEntry] = {
 
-    val initialSnapshot: Dataset[Cell] = startingSnapshot(spark)
+  def computeChronicles(spark: SparkSession, pathPrefix: String): Dataset[ChronicleEntry] = {
 
-    val linearChronicles =
-      computeLinearChronicles(initialSnapshot, groupedEvents).
-        repartitionByRange(col("eventKind")).checkpoint(eager=true)
+    val stream = StreamReader.readEventStreamLinesParquet(spark, pathPrefix)
+    val events = StreamReader.toEvents(stream)
+    val groupedEvents = groupEvents(events)
+    val linearChronicles = computeLinearChronicles(startingSnapshot(spark), groupedEvents).checkpoint()
+    val chronicles = computeChronicles(linearChronicles)
 
-    computeChronicles(linearChronicles)
+    return chronicles
   }
 
   def computeOrReadChronicles(spark: SparkSession, pathPrefix: String): Dataset[ChronicleEntry] =
@@ -128,9 +125,8 @@ object Chronicler {
       chronicles = spark.read.parquet(pathPrefix + "/chronicles.parquet").as[ChronicleEntry]
     }catch {
       case e: Exception => {
-
-        val events = StreamLoader.convertOrReadEvents(spark, pathPrefix)
-        computeChronicles(spark, events, pathPrefix).
+        val tmpChronicles = computeChronicles(spark, pathPrefix)
+        tmpChronicles.
           write.
           mode("overwrite").
           mode(SaveMode.Overwrite).
@@ -140,7 +136,7 @@ object Chronicler {
       }
     }
     chronicles
-  }*/
+  }
 
   def main(args: Array[String]) {
 
@@ -158,11 +154,7 @@ object Chronicler {
     val stream = StreamReader.readEventStreamLinesParquet(spark, pathPrefix)
     val events = StreamReader.toEvents(stream)
     val groupedEvents = groupEvents(events)
-    val linearChronicles = computeLinearChronicles(startingSnapshot(spark), groupedEvents).
-      //repartitionByRange(col("eventId")).
-      //sort(col("eventId")).
-      persist()
-
+    val linearChronicles = computeLinearChronicles(startingSnapshot(spark), groupedEvents).persist()
     val chronicles = computeChronicles(linearChronicles)
 
     chronicles.
@@ -178,8 +170,8 @@ object Chronicler {
       option("header", true).
       save(pathPrefix+"/chronicles.csv")
 */
-    //scala.io.StdIn.readLine()
+    scala.io.StdIn.readLine()
 
-    linearChronicles.unpersist()
+    //linearChronicles.unpersist()
   }
 }

@@ -3,7 +3,7 @@ package analyzer
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.{Dataset, Encoders, SparkSession}
 import org.apache.spark.storage.StorageLevel
-/*
+
 object Phylogeny  {
   def mutationTree(chronicles: Dataset[ChronicleEntry]): Dataset[MutationTreeLink] = {
 
@@ -41,11 +41,12 @@ object Phylogeny  {
       as[(Long,Long)].
       withColumnRenamed("id","mutationId").
       as[MutationTreeLink]
+*/
 
-
-    */
-
-  def lineage(spark: SparkSession, pathPrefix: String, mutations: Dataset[MutationTreeLink], root: Long = 1): Dataset[Ancestry] = {
+  def lineage(spark: SparkSession,
+              pathPrefix: String,
+              mutations: Dataset[MutationTreeLink],
+              root: Long = 1): Dataset[Ancestry] = {
     import spark.implicits._
 
     val lineagesTmpPath = pathPrefix + "/lineages.tmp"
@@ -61,7 +62,7 @@ object Phylogeny  {
     var selectedTmpPathOther: String = pathPrefix + "/selected2"
 
     Seq((root, Array[Long](root))).
-      toDF("mutationId","ancestors").
+      toDF("mutationId", "ancestors").
       as[Ancestry].
       write.
       mode("overwrite").
@@ -70,7 +71,7 @@ object Phylogeny  {
     val all_mutations: Dataset[MutationTreeLink] = mutations.
       sort("parentId").
       as[MutationTreeLink].
-      persist(StorageLevel.MEMORY_AND_DISK)
+      persist()
 
     val all_count: Long = all_mutations.count
     println(s"all_count =  $all_count")
@@ -155,7 +156,7 @@ object Phylogeny  {
     }
     return lineages
   }
-
+/*
   def main_(args: Array[String]) = {
     if( args.length != 1 )
       throw new RuntimeException("no prefix path given");
@@ -179,6 +180,5 @@ object Phylogeny  {
     Analyzer.saveCSV(pathPrefix + "/muller_plot_data",
       Muller.mullerData(spark, chronicles, lineages, maxTime, 1000).toDF,
       true);
-  }
+  }*/
 }
-*/
