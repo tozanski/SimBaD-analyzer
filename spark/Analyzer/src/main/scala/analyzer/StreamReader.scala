@@ -1,9 +1,6 @@
 package analyzer
 
-import analyzer.expression.functions.{partition_id, sequentialGroup}
 
-
-import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions.{col, lit, monotonically_increasing_id, struct}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{Column, Dataset, Encoders, SparkSession, SaveMode }
@@ -119,11 +116,11 @@ object StreamReader {
 
   def createOrReadEnumeratedEvents(spark: SparkSession, pathPrefix: String): Dataset[EnumeratedEvent] = {
     import spark.implicits._
-    val outputName = pathPrefix + "/events.parquet"
+    val path = pathPrefix + "/enumeratedEvents.parquet"
 
     var events: Dataset[EnumeratedEvent] = null
     try{
-      events = spark.read.parquet(outputName).as[EnumeratedEvent]
+      events = spark.read.parquet(path).as[EnumeratedEvent]
     }catch {
       case e: Exception =>
         readEvents(spark, pathPrefix).
@@ -131,8 +128,8 @@ object StreamReader {
           as(Encoders.product[EnumeratedEvent]).
           write.
           mode(SaveMode.Overwrite).
-          parquet(outputName)
-        events = spark.read.parquet(outputName).as[EnumeratedEvent]
+          parquet(path)
+        events = spark.read.parquet(path).as[EnumeratedEvent]
     }
     events
   }
@@ -151,7 +148,7 @@ object StreamReader {
       getOrCreate()
 
 
-    readEventStreamLines(spark, pathPrefix).
+    readEventStreamLines(spark, pathPrefix + "/stream.csv.gz").
       write.
       mode(SaveMode.Overwrite).
       parquet(pathPrefix+"/stream.parquet")

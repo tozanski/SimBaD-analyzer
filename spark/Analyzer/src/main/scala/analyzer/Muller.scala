@@ -3,7 +3,7 @@ package analyzer
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.{Dataset, Encoders, SparkSession}
-/*
+
 object Muller{
   def mullerOrder(lineages: Dataset[Ancestry] ): Dataset[(Long,Long)] = {
 
@@ -11,8 +11,8 @@ object Muller{
 
     implicit val mutationOrder = new Ordering[Iterable[Long]]{
       override def compare( lhs: Iterable[Long], rhs: Iterable[Long]): Int = {
-        var itL = lhs.iterator;
-        val itR = rhs.iterator;
+        var itL = lhs.iterator
+        val itR = rhs.iterator
 
         while( true )
         {
@@ -23,10 +23,10 @@ object Muller{
           val valL = itL.next
           val valR = itR.next
 
-          if( valL < valR ) return +1;
-          if( valL > valR ) return -1;
+          if( valL < valR ) return +1
+          if( valL > valR ) return -1
         }
-        return 0;
+        return 0
       }
     }
 
@@ -86,4 +86,3 @@ object Muller{
       as(Encoders.product[(Long,Long)])
   }
 }
-*/
