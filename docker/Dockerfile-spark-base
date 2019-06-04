@@ -1,0 +1,18 @@
+FROM openjdk:8-jre-slim
+
+ENV SPARK_VERSION=2.4.3
+ENV HADOOP_VERSION=2.7
+
+RUN apt-get update && apt-get -y install \
+        wget \
+    && apt-get clean
+        
+RUN wget -q https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz \
+    && tar -xzf spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz -C /opt \
+    && rm spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz
+
+ENV PATH="/opt/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}/bin/:${PATH}"
+
+RUN mkdir -p /workdir
+
+WORKDIR /workdir
