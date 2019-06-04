@@ -1,6 +1,6 @@
 package analyzer
 
-import analyzer.expression.functions.sequentialGroup
+import analyzer.expression.functions.eventGroup
 import org.apache.spark.sql.catalyst.expressions.{Add, AggregateWindowFunction, AttributeReference, Expression, If, Literal}
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions._
@@ -35,16 +35,25 @@ object Chronicler {
     starting.toDS
   }
 
+  def initialEvents(snapshot: Dataset[Cell]): Dataset[GroupedEvent] = {
+    snapshot.
+      withColumn("time", lit(Double.NegativeInfinity)).
+      withColumn("timeDelta", monotonically_increasing_id().cast(IntegerType)).
+      withColumn("eventKind", LIT_CREATED).
+      withColumn("eventId", lit(0L)).
+      as(Encoders.product[GroupedEvent])
+  }
+
   def groupEventsDF(events: Dataset[Event]): DataFrame /*Dataset[GroupedEvent]*/ = {
 
     val windowSpec = Window.partitionBy("partitionId").orderBy("timeOrder")
     events.
       withColumn("timeOrder", monotonically_increasing_id()).
       repartitionByRange(col("time")).
-      sortWithinPartitions("timeOrder").
+      //sortWithinPartitions("timeOrder").
       withColumn("partitionId", spark_partition_id().cast(LongType)).
       withColumn("eventId",
-       sequentialGroup(col("timeDelta")===0).over(windowSpec) + shiftLeft(col("partitionId"), PARTITION_MASK_SHIFT)
+       eventGroup(col("timeDelta")).over(windowSpec) + shiftLeft(col("partitionId"), PARTITION_MASK_SHIFT)
     )
   }
   def groupEvents(events: Dataset[Event]): Dataset[GroupedEvent] = {
@@ -53,14 +62,7 @@ object Chronicler {
 
   def computeLinearChronicles(initial: Dataset[Cell], groupedEvents: Dataset[GroupedEvent]): DataFrame = {
 
-    val initialEvents: Dataset[GroupedEvent] = initial.
-      withColumn("time", lit(Double.NegativeInfinity)).
-      withColumn("timeDelta", monotonically_increasing_id().cast(IntegerType)).
-      withColumn("eventKind", LIT_CREATED).
-      withColumn("eventId", lit(0L)).
-      as(Encoders.product[GroupedEvent])
-
-    val enumeratedEvents: Dataset[GroupedEvent] = initialEvents unionByName groupedEvents
+    val enumeratedEvents: Dataset[GroupedEvent] = initialEvents(initial) unionByName groupedEvents
 
     val linearChronicles = enumeratedEvents.
       repartition(256, col("position")).
@@ -111,31 +113,44 @@ object Chronicler {
     val stream = StreamReader.readEventStreamLinesParquet(spark, pathPrefix)
     val events = StreamReader.toEvents(stream)
     val groupedEvents = groupEvents(events)
-    val linearChronicles = computeLinearChronicles(startingSnapshot(spark), groupedEvents).checkpoint()
+    val linearChronicles = computeLinearChronicles(startingSnapshot(spark), groupedEvents).
+      checkpoint(eager = false)
     val chronicles = computeChronicles(linearChronicles)
 
     return chronicles
   }
 
+  def writeLinearChronicles(spark: SparkSession, pathPrefix: String) = {
+
+    val stream = StreamReader.readEventStreamLinesParquet(spark, pathPrefix)
+    val events = StreamReader.toEvents(stream)
+
+    val groupedEvents = groupEvents(events)
+    //spark.sparkContext.setJobGroup("grouped events", "write grouped events")
+    //groupedEvents.write.mode(SaveMode.Overwrite).parquet(pathPrefix+"/grouped_events.parquet")
+
+    val linearChronicles = computeLinearChronicles(startingSnapshot(spark), groupedEvents)
+    //spark.sparkContext.setJobGroup("linear chronicles", "write linear chronicles")
+    //linearChronicles.write.mode(SaveMode.Overwrite).parquet(pathPrefix+"/linear_chronicles.parquet")
+
+  }
+
   def computeOrReadChronicles(spark: SparkSession, pathPrefix: String): Dataset[ChronicleEntry] =
   {
     import spark.implicits._
-    var chronicles: Dataset[ChronicleEntry] = null
+    //var chronicles: Dataset[ChronicleEntry] = null
     try{
-      chronicles = spark.read.parquet(pathPrefix + "/chronicles.parquet").as[ChronicleEntry]
+      spark.read.parquet(pathPrefix+"/chronicles.parquet").as[ChronicleEntry]
     }catch {
-      case e: Exception => {
-        val tmpChronicles = computeChronicles(spark, pathPrefix)
-        tmpChronicles.
+      case _: AnalysisException =>
+        spark.sparkContext.setJobGroup("chronicles", "save chronicles")
+        computeChronicles(spark, pathPrefix).
+          //repartition(col("particleId")).
           write.
-          mode("overwrite").
           mode(SaveMode.Overwrite).
           parquet(pathPrefix+"/chronicles.parquet")
-
-        chronicles = spark.read.parquet(pathPrefix + "/chronicles.parquet").as[ChronicleEntry]
-      }
+        spark.table(pathPrefix + "/chronicles.parquet").as[ChronicleEntry]
     }
-    chronicles
   }
 
   def main(args: Array[String]) {
@@ -151,27 +166,8 @@ object Chronicler {
 
     spark.sparkContext.setCheckpointDir(pathPrefix + "/checkpoints/")
 
-    val stream = StreamReader.readEventStreamLinesParquet(spark, pathPrefix)
-    val events = StreamReader.toEvents(stream)
-    val groupedEvents = groupEvents(events)
-    val linearChronicles = computeLinearChronicles(startingSnapshot(spark), groupedEvents).persist()
-    val chronicles = computeChronicles(linearChronicles)
-
-    chronicles.
-      write.
-      mode(SaveMode.Overwrite).
-      parquet(pathPrefix + "/chronicles.parquet")
-    /*
-    chronicles.
-      write.
-      mode(SaveMode.Overwrite).
-      format("csv").
-      option("delimiter", ";").
-      option("header", true).
-      save(pathPrefix+"/chronicles.csv")
-*/
+    computeOrReadChronicles(spark, pathPrefix)
+    //writeLinearChronicles(spark, pathPrefix)
     scala.io.StdIn.readLine()
-
-    //linearChronicles.unpersist()
   }
 }
