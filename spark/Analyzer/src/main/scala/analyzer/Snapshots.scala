@@ -22,6 +22,15 @@ object Snapshots{
       as(Encoders.product[Cell])
   }
 
+
+  def getClones(mutations: Dataset[Cell]): Dataset[Clone] = {
+    mutations.groupBy("mutationId").
+      agg(
+        count(lit(1)).as("count"),
+        first(col("mutation")).as("mutation")
+      ).
+      as(Encoders.product[Clone])
+  }
   def getSnapshotList(chronicles: Dataset[ChronicleEntry], timePoints: Iterable[Double]): Vector[Dataset[ChronicleEntry]] = {
     timePoints.map(t => chronicles.filter(
       col("birthTime") < lit(t) && lit(t) < col("deathTime"))

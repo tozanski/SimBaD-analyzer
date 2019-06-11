@@ -1,6 +1,6 @@
 package analyzer
 
-import java.io.PrintWriter
+import java.io.{File, PrintWriter}
 
 import org.apache.spark.sql.{Column, DataFrame, Dataset, Encoders, Row}
 import org.apache.spark.sql.functions.{array_join, col, collect_list, lit}
@@ -93,4 +93,24 @@ object CellHistogram {
             saveAsTextFile(pathPrefix+"histogram_"+parameterName)
     }
   }
+  def writeArr(pathPrefix: String, histograms: Array[CellHistogram]) = {
+    for (parameterName: String <- mutationParameterNames) {
+      val filePath = pathPrefix + "histogram_"+parameterName+".csv"
+      val pw = new PrintWriter(new File(filePath))
+      for (histogramPack: CellHistogram <- histograms) {
+        val histogramField = histogramPack.
+          getClass.
+          getDeclaredField(parameterName)
+        histogramField.setAccessible(true)
+
+        val histogram: Array[Long] = histogramField.
+          get(histogramPack).
+          asInstanceOf[Array[Long]]
+
+        pw.println(histogram.mkString(";"))
+      }
+      pw.close()
+    }
+  }
+
 }

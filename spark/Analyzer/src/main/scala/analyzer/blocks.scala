@@ -97,16 +97,8 @@ case class ChronicleEntry(
   )
 }
 
-case class Clone(
-  mutationId: Long,
-  count: Long,
-  birthEfficiency: Float,
-  birthResistance: Float,
-  lifespanEfficiency: Float,
-  lifespanResistance: Float,
-  successEfficiency: Float,
-  successResistance: Float
-)
-
+case class Clone(mutationId: Long, count: Long, mutation: Mutation)
 case class MutationTreeLink(mutationId: Long, parentMutationId: Long)
 case class Ancestry(mutationId: Long, ancestors: Array[Long])
+case class MutationOrder(mutationId: Long, ordering: Long)
+

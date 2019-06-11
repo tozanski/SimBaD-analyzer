@@ -5,7 +5,7 @@ import org.apache.spark.sql.functions._
 import org.apache.spark.sql.{Dataset, Encoders, SparkSession}
 
 object Muller{
-  def mullerOrder(lineages: Dataset[Ancestry] ): Dataset[(Long,Long)] = {
+  def mullerOrder(lineages: Dataset[Ancestry] ): Dataset[MutationOrder] = {
 
     import lineages.sparkSession.implicits._
 
@@ -39,7 +39,7 @@ object Muller{
       map( _._1).
       toDF("mutationId").
       withColumn("ordering", monotonically_increasing_id).
-      as[(Long,Long)]
+      as[MutationOrder]
   }
 
   def mullerData( spark: SparkSession,
@@ -62,7 +62,7 @@ object Muller{
         $"aggMutationId".alias("mutationId").as[Long],
         $"timePoint".as[Double])
 
-    val orderedMutations: Dataset[(Long, Long)] = mullerOrder(lineages)
+    val orderedMutations: Dataset[MutationOrder] = mullerOrder(lineages)
 
     val mullerCumulatives = snapshots.
       join(orderedMutations,Seq("mutationId"), "left").
@@ -76,6 +76,28 @@ object Muller{
     mullerCumulatives
   }
 
+  def collect(clones: Dataset[Clone], mutationOrder: Dataset[MutationOrder]): Array[Long] = {
+    import clones.sparkSession.implicits._
+
+    val defaultClone = ((null, 0, null, null)::Nil).toDF("mutationId", "count", "mutation", "ordering")
+
+    clones.sparkSession.sparkContext.setJobGroup("muller snapshot", "muller plot data snapshot")
+    clones.
+      join(broadcast(mutationOrder), Seq("mutationId"), "outer").
+      unionByName(defaultClone).
+      groupBy("ordering").
+      agg(
+        //first(col("mutationId")).as("mutationId"),
+        sum(coalesce(col("count"), lit(0))).as("count")
+      ).
+      orderBy("ordering").
+      drop("ordering").
+      as(Encoders.scalaLong).
+      collect()
+  }
+
+
+/*
   def mullerPlotSnapshot(snapshot: Dataset[Cell], mutationOrder: Dataset[(Long, Long)]): Dataset[(Long, Long)] = {
     snapshot.
       groupBy("mutationId").
@@ -85,4 +107,5 @@ object Muller{
         cume_dist over Window.orderBy("ordering")).
       as(Encoders.product[(Long,Long)])
   }
+ */
 }
