@@ -88,8 +88,8 @@ object Analyzer {
 
     val chronicles = Chronicler.
       computeOrReadChronicles(spark, pathPrefix).
-      coalesce(2). // debug only
-      persist() // debug only
+      //coalesce(2). // debug only
+      //persist() // debug only
 
     val maxTime =  getMaxTime(chronicles)
     //val maxTime = 5.0 // debug only
@@ -112,7 +112,7 @@ object Analyzer {
         join(broadcast(largeMutations.select("mutationId")),"mutationId").
         as[Ancestry]
       ).
-      coalesce(2).
+      coalesce(1).
       persist(StorageLevel.MEMORY_AND_DISK_SER_2)
 
     spark.sparkContext.setJobGroup("large mutations", "save large mutations")
@@ -158,13 +158,13 @@ object Analyzer {
     {
       snapshot = Snapshots.
         getSnapshot(chronicles, time).
-        coalesce(100). // for debug only
+        coalesce(64). // for debug only
         persist()
 
       snapshotStats += CellStats.collect(snapshot)
       cellHistograms += CellHistogram.collect(snapshot)
 
-      clones = Snapshots.getClones(snapshot).coalesce(10).persist()
+      clones = Snapshots.getClones(snapshot).coalesce(32).persist()
       cloneStats += CloneStats.collect(clones)
 
       mullerPlotData += Muller.collect(clones, largeMullerOrder)
