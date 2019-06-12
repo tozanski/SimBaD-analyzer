@@ -87,8 +87,8 @@ object Analyzer {
     import spark.implicits._
 
     val chronicles = Chronicler.
-      computeOrReadChronicles(spark, pathPrefix).
-      //coalesce(2). // debug only
+      computeOrReadChronicles(spark, pathPrefix)
+      //.coalesce(2). // debug only
       //persist() // debug only
 
     val maxTime =  getMaxTime(chronicles)
