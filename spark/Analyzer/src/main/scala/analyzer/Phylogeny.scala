@@ -155,7 +155,7 @@ object Phylogeny  {
       case _: Exception =>
         spark.sparkContext.setJobGroup("lineage","phylogeny lineage")
         writeLineage(spark, pathPrefix, mutationTree)
-          
+
         spark.read.parquet(lineagesPath).as[Ancestry]
       }
     }

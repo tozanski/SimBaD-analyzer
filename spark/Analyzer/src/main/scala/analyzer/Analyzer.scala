@@ -103,6 +103,9 @@ object Analyzer {
       filter( $"mutationSize" > 1000 ).
       select($"mutationId".as[Long], $"mutation".as[Mutation]).
       cache()
+    spark.sparkContext.setJobGroup("large mutations", "count large mutations")
+    println("Large mutation count" + largeMutations.count())
+
 
     val mutationTree = Phylogeny.getOrComputeMutationTree(spark, pathPrefix, chronicles)
     val lineages = Phylogeny.getOrComputeLineages(spark, pathPrefix, mutationTree)
