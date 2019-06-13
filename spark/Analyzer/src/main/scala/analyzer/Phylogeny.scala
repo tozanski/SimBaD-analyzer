@@ -154,11 +154,8 @@ object Phylogeny  {
     }catch{
       case _: Exception =>
         spark.sparkContext.setJobGroup("lineage","phylogeny lineage")
-        writeLineage(spark, pathPrefix, mutationTree).
-          repartition($"mutationId").
-          write.
-          mode("overwrite").
-          parquet(lineagesPath)
+        writeLineage(spark, pathPrefix, mutationTree)
+          
         spark.read.parquet(lineagesPath).as[Ancestry]
       }
     }
