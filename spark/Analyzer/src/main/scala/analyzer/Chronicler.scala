@@ -149,7 +149,7 @@ object Chronicler {
           write.
           mode(SaveMode.Overwrite).
           parquet(pathPrefix+"/chronicles.parquet")
-        spark.table(pathPrefix + "/chronicles.parquet").as[ChronicleEntry]
+        spark.read.parquet(pathPrefix + "/chronicles.parquet").as[ChronicleEntry]
     }
   }
 
