@@ -1,7 +1,7 @@
 package analyzer
 
-import org.apache.spark.sql.{Dataset, Encoders, SparkSession}
-import org.apache.spark.sql.functions.{avg, count, hypot, lit, max, stddev}
+import org.apache.spark.sql.{Column, Dataset, Encoders, Row, SparkSession, TypedColumn}
+import org.apache.spark.sql.functions.{array, avg, col, concat, count, explode, hypot, lit, max, stddev, struct, when}
 
 case class CellStats(
   count: Long, max_origin_distance: Double,
@@ -15,6 +15,57 @@ case class CellStats(
 )
 
 object CellStats {
+
+  def OnePassStats(chronicles: Dataset[ChronicleEntry], timePoints: Seq[Double]): Array[CellStats] = {
+
+    def colOrNull(value: Column, timePoint: Double): Column = {
+      when(
+        col("birthTime") < lit(timePoint) && lit(timePoint) < col("deathTime"),
+        value
+      ).otherwise(null)
+    }
+
+    def timePointStats(timePoint: Double): TypedColumn[Any, CellStats] = {
+      struct(
+        count(colOrNull(lit(1), timePoint)).alias("count"),
+        max(colOrNull(hypot(hypot("position.x", "position.y"), "position.z"), timePoint)).alias("max_origin_distance"),
+
+        avg(colOrNull(col("mutation.birthEfficiency"), timePoint)).alias("mean_birth_efficiency"),
+        avg(colOrNull(col("mutation.birthResistance"), timePoint)).alias("mean_birth_resistance"),
+        avg(colOrNull(col("mutation.lifespanEfficiency"), timePoint)).alias("mean_lifespan_efficiency"),
+        avg(colOrNull(col("mutation.lifespanResistance"), timePoint)).alias("mean_lifespan_resistance"),
+        avg(colOrNull(col("mutation.successEfficiency"), timePoint)).alias("mean_success_efficiency"),
+        avg(colOrNull(col("mutation.successResistance"), timePoint)).alias("mean_success_resistance"),
+
+        stddev(colOrNull(col("mutation.birthEfficiency"), timePoint)).alias("stddev_birth_efficiency"),
+        stddev(colOrNull(col("mutation.birthResistance"), timePoint)).alias("stddev_birth_resistance"),
+        stddev(colOrNull(col("mutation.lifespanEfficiency"), timePoint)).alias("stddev_lifespan_efficiency"),
+        stddev(colOrNull(col("mutation.lifespanResistance"), timePoint)).alias("stddev_lifespan_resistance"),
+        stddev(colOrNull(col("mutation.successEfficiency"), timePoint)).alias("stddev_success_efficiency"),
+        stddev(colOrNull(col("mutation.successResistance"), timePoint)).alias("stddev_success_resistance")
+      ).alias("cell_stats").as(Encoders.product[CellStats])
+    }
+
+    val aggregates = timePoints.
+      zipWithIndex.
+      map({case(t,idx) => timePointStats(t).alias("cell_stats_"+idx.toString)})
+
+    chronicles.sparkSession.sparkContext.setJobGroup("cell stats", "single pass cell stats")
+    chronicles.
+      agg(
+        aggregates.head, aggregates.tail:_*
+      ).
+      select(
+        array(
+          timePoints.zipWithIndex.map({case(_,idx) => col("cell_stats_"+idx.toString)}):_*
+        ).alias("aggregated")
+      ).
+      select(explode(col("aggregated"))).
+      select("col.*").
+      as(Encoders.product[CellStats]).
+      collect()
+  }
+
   def compute(cells: Dataset[Cell]): Dataset[CellStats] = {
 
     cells.
@@ -42,6 +93,7 @@ object CellStats {
   }
 
   def collect(cells: Dataset[Cell]): CellStats = {
+    cells.sparkSession.sparkContext.setJobGroup("cell stats", " compute cell stats in one pass")
     compute(cells).collect()(0)
   }
 }

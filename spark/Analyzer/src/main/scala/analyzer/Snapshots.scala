@@ -1,12 +1,16 @@
 package analyzer
 
 import org.apache.spark.sql.functions._
+import org.apache.spark.sql.types.{IntegerType}
 import org.apache.spark.sql.{DataFrame, Dataset, Encoders, SparkSession}
 
 object Snapshots{
   def snapshotsUdf(maxTime: Double) = udf(
       (t1:Double, t2:Double) => (0d to maxTime by 1).filter( t => t1 <= t && t < t2 )
     )
+  def snapshotsUdf(timePoints: Seq[Double]) = udf(
+    (t1: Double, t2:Double) => timePoints.filter(t => t1<=t && t<t2)
+  )
 
   def getSnapshots( chronicles: Dataset[ChronicleEntry], maxTime: Double ): DataFrame = {
     chronicles.withColumn("timePoint", explode(snapshotsUdf(maxTime)(col("birthTime"), col("deathTime"))))
@@ -23,14 +27,47 @@ object Snapshots{
   }
 
 
-  def getClones(mutations: Dataset[Cell]): Dataset[Clone] = {
-    mutations.groupBy("mutationId").
+  def getCloneSnapshot(cells: Dataset[Cell]): Dataset[Clone] = {
+    cells.
+      groupBy("mutationId").
       agg(
         count(lit(1)).as("count"),
         first(col("mutation")).as("mutation")
       ).
       as(Encoders.product[Clone])
   }
+
+  def getCloneSnapshots(chronicles: Dataset[ChronicleEntry], maxTime: Double): DataFrame = {
+    chronicles.
+      repartition(col("mutationId")).
+      withColumn("timePoint",
+        explode(
+          sequence(
+            greatest(lit(0), col("birthTime")).cast(IntegerType),
+            least(lit(maxTime), col("deathTime")).cast(IntegerType)
+          )
+        )
+      ).
+      groupBy("mutationId","timePoint").
+      agg(
+        count(lit(1)).as("count"),
+        first(col("mutation")).as("mutation")
+      )
+  }
+
+  def getCloneSnapshots(chronicles: Dataset[ChronicleEntry], timePoints: Seq[Double]) : DataFrame = {
+    chronicles.
+      repartition(col("mutationId")).
+      withColumn("timePoint",
+      explode(
+        snapshotsUdf(timePoints)(col("birthTime"), col("deathTime")))
+      ).groupBy("mutationId", "timePoint").
+      agg(
+        count(lit(1)).alias("count"),
+        first(col("mutation")).alias("mutation")
+      )
+  }
+
   def getSnapshotList(chronicles: Dataset[ChronicleEntry], timePoints: Iterable[Double]): Vector[Dataset[ChronicleEntry]] = {
     timePoints.map(t => chronicles.filter(
       col("birthTime") < lit(t) && lit(t) < col("deathTime"))
@@ -51,9 +88,17 @@ object Snapshots{
         )
   }
 
-  def getFinal( chronicleEntries: Dataset[ChronicleEntry]): DataFrame = {
-    // final
-    chronicleEntries.filter( col("deathTime") === Double.PositiveInfinity ).
+  def finalCloneSnapshot(chronicles: Dataset[ChronicleEntry]): Dataset[Clone] = chronicles.
+    filter(col("deathTime")===Double.PositiveInfinity).
+    groupBy("mutationId").
+    agg(
+      count(lit(1)).as("count"),
+      first(col("mutation")).as("mutation")
+    ).
+    as(Encoders.product[Clone])
+
+  def getFinalCells(chronicleEntries: Dataset[ChronicleEntry]): DataFrame = chronicleEntries.
+    filter( col("deathTime") === Double.PositiveInfinity ).
       select(
         "position.x", "position.y", "position.z",
         "mutationId",
@@ -61,7 +106,8 @@ object Snapshots{
         "mutation.lifespanEfficiency", "mutation.lifespanResistance",
         "mutation.successEfficiency", "mutation.successResistance"
       )
-  }
+
+
 /*
   def getFinalSimpleMutationHistogram( finalConfiguration: DataFrame ): DataFrame = {
     finalConfiguration.groupBy("mutationId").count().orderBy("mutationId")

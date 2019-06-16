@@ -138,51 +138,43 @@ object Analyzer {
     val mullerMutationNames =
       "noise" +: largeMullerOrder.select(col("mutationId").as[Long]).collect().map("mutation_" + _.toString)
 
-
+    val finalSnapshotPath = pathPrefix + "/final_snapshot.csv"
     val cellStatsPath = pathPrefix + "/cell_stats.csv"
     val histogramStatsPath = pathPrefix + "/histograms.parquet"
     val cloneStatsPath = pathPrefix + "/clone_stats.csv"
     val mullerPlotPath = pathPrefix + "/muller_data.csv"
     val finalMutationFrequencyPath = pathPrefix + "/final_mutation_freq.csv"
 
-
-    var snapshotStats = MutableList[CellStats]()
-    var cellHistograms = MutableList[CellHistogram]()
-    var cloneStats = MutableList[CloneStats]()
     var mullerPlotData = MutableList[Array[Long]]()
 
-    var snapshot: Dataset[Cell] = null
-    var clones: Dataset[Clone] = null
 
     val timePoints = (0d until maxTime by 1.0d) :+ maxTime
     saveCSV(pathPrefix + "/time_points.csv", timePoints)
 
-    for( time <- timePoints)
-    {
-      snapshot = Snapshots.
-        getSnapshot(chronicles, time).
-        coalesce(64). // for debug only
-        persist()
 
-      snapshotStats += CellStats.collect(snapshot)
-      cellHistograms += CellHistogram.collect(snapshot)
+    val cloneSnapshots = Snapshots.getCloneSnapshots(chronicles, timePoints)
 
-      clones = Snapshots.getClones(snapshot).coalesce(32).persist()
-      cloneStats += CloneStats.collect(clones)
+    saveParquet(pathPrefix + "/clones_stats.parquet", CloneStats.collect(cloneSnapshots).toSeq.toDF, coalesce = false)
+    saveParquet(pathPrefix + "/muller_data.parquet", Muller.compute(cloneSnapshots, largeMullerOrder), coalesce = false)
 
-      mullerPlotData += Muller.collect(clones, largeMullerOrder)
 
-      snapshot.unpersist()
-      clones.unpersist()
-    }
-    saveCSV(cellStatsPath, snapshotStats.toDS().toDF(), coalesce=true)
-    saveCSV(cloneStatsPath, cloneStats.toDF(), coalesce=true)
+    saveCSV(cellStatsPath, CellStats.OnePassStats(chronicles, timePoints))
+    //saveCSV(cellStatsPath, cellStats.toDS.toDF, coalesce=true)
+    //saveCSV(cloneStatsPath, cloneStats.toDF(), coalesce=true)
+
+    val finalCellSnapshot = Snapshots.getFinalCells(chronicles)
+
+    saveCSV(finalSnapshotPath, finalCellSnapshot, coalesce = false)
+
+
+    val finalCloneSnapshot = Snapshots.finalCloneSnapshot(chronicles)
 
     saveCSV(
       finalMutationFrequencyPath,
-      CloneStats.computeMutationFrequency(clones, lineages).orderBy("ancestorMutationId").toDF(),
+      CloneStats.computeMutationFrequency(finalCloneSnapshot, lineages).orderBy("ancestorMutationId").toDF(),
       coalesce = true)
 
     saveCSV(mullerPlotPath, mullerPlotData, mullerMutationNames)
+
   }
 }

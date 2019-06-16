@@ -2,7 +2,7 @@ package analyzer
 
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.{Dataset, Encoders, SparkSession}
+import org.apache.spark.sql.{Dataset, DataFrame, Encoders, SparkSession}
 
 object Muller{
   def mullerOrder(lineages: Dataset[Ancestry] ): Dataset[MutationOrder] = {
@@ -74,6 +74,23 @@ object Muller{
       as[(Long, Double, Double)]
 
     mullerCumulatives
+  }
+
+
+  def compute(cloneSnapshots: DataFrame, mutationOrder: Dataset[MutationOrder] ) ={
+    val spark = cloneSnapshots.sparkSession
+    import spark.implicits._
+
+    val defaultClone = ((null, 0, null, null)::Nil).toDF("mutationId", "count", "mutation", "ordering")
+
+    spark.sparkContext.setJobGroup("muller snapshot", "muller plot data snapshot")
+    cloneSnapshots.
+      join(broadcast(mutationOrder), Seq("mutationId"), "outer").
+      groupBy("timePoint","ordering").
+      agg(
+        sum(coalesce(col("count"), lit(0))).as("count")
+      )
+
   }
 
   def collect(clones: Dataset[Clone], mutationOrder: Dataset[MutationOrder]): Array[Long] = {
