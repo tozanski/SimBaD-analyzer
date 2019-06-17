@@ -168,6 +168,6 @@ object Chronicler {
 
     computeOrReadChronicles(spark, pathPrefix)
     //writeLinearChronicles(spark, pathPrefix)
-    scala.io.StdIn.readLine()
+    //scala.io.StdIn.readLine()
   }
 }
