@@ -50,6 +50,9 @@ object Analyzer {
   }
 
 
+
+
+
   def notNullableSchema(schema: StructType) : StructType = {
     StructType( schema.map{
       case StructField(n, t, _, m) => t match {
@@ -118,6 +121,8 @@ object Analyzer {
       coalesce(1).
       persist(StorageLevel.MEMORY_AND_DISK_SER_2)
 
+    val largeMutationsMullerOrdered = largeMullerOrder.orderBy("ordering").collect.map(_.mutationId)
+
     spark.sparkContext.setJobGroup("large mutations", "save large mutations")
     saveCSV(pathPrefix+"/large_mutations.csv",
       largeMutations.join(broadcast(largeMullerOrder), "mutationId").
@@ -134,55 +139,47 @@ object Analyzer {
       coalesce=true)
 
 
+
+
     spark.sparkContext.setJobGroup("large mutation names", "collect large mutations")
     val mullerMutationNames =
       "noise" +: largeMullerOrder.select(col("mutationId").as[Long]).collect().map("mutation_" + _.toString)
 
-
+    val finalSnapshotPath = pathPrefix + "/final_snapshot.csv"
     val cellStatsPath = pathPrefix + "/cell_stats.csv"
-    val histogramStatsPath = pathPrefix + "/histograms.parquet"
+    //val histogramStatsPath = pathPrefix + "/histograms.parquet"
     val cloneStatsPath = pathPrefix + "/clone_stats.csv"
     val mullerPlotPath = pathPrefix + "/muller_data.csv"
     val finalMutationFrequencyPath = pathPrefix + "/final_mutation_freq.csv"
 
 
-    var snapshotStats = MutableList[CellStats]()
-    var cellHistograms = MutableList[CellHistogram]()
-    var cloneStats = MutableList[CloneStats]()
-    var mullerPlotData = MutableList[Array[Long]]()
-
-    var snapshot: Dataset[Cell] = null
-    var clones: Dataset[Clone] = null
-
     val timePoints = (0d until maxTime by 1.0d) :+ maxTime
     saveCSV(pathPrefix + "/time_points.csv", timePoints)
 
-    for( time <- timePoints)
-    {
-      snapshot = Snapshots.
-        getSnapshot(chronicles, time).
-        coalesce(64). // for debug only
-        persist()
+    val cloneSnapshots = Snapshots.computeOrReadCloneSnapshots(pathPrefix, chronicles, timePoints)
 
-      snapshotStats += CellStats.collect(snapshot)
-      cellHistograms += CellHistogram.collect(snapshot)
+    saveCSV(pathPrefix + "/muller_data.csv",
+      Muller.compute(cloneSnapshots, largeMutationsMullerOrdered).orderBy("timePoint"), coalesce = true)
 
-      clones = Snapshots.getClones(snapshot).coalesce(32).persist()
-      cloneStats += CloneStats.collect(clones)
+    val cloneStats = CloneStats.collect(cloneSnapshots)
+    CloneStats.writeHistograms(pathPrefix, cloneStats.map(_.histograms))
+    CloneStats.writeScalars(cloneStatsPath, cloneStats.map(_.scalarStats))
 
-      mullerPlotData += Muller.collect(clones, largeMullerOrder)
 
-      snapshot.unpersist()
-      clones.unpersist()
-    }
-    saveCSV(cellStatsPath, snapshotStats.toDS().toDF(), coalesce=true)
-    saveCSV(cloneStatsPath, cloneStats.toDF(), coalesce=true)
+    saveCSV(cellStatsPath, CellStats.OnePassStats(chronicles, timePoints))
+    //saveCSV(cellStatsPath, cellStats.toDS.toDF, coalesce=true)
+    //saveCSV(cloneStatsPath, cloneStats.toDF(), coalesce=true)
+
+    spark.sparkContext.setJobGroup("final", "save final configuration")
+    val finalCellSnapshot = Snapshots.getFinalCells(chronicles)
+    saveCSV(finalSnapshotPath, finalCellSnapshot, coalesce = false)
+
+
+    val finalCloneSnapshot = Snapshots.finalCloneSnapshot(chronicles)
 
     saveCSV(
       finalMutationFrequencyPath,
-      CloneStats.computeMutationFrequency(clones, lineages).orderBy("ancestorMutationId").toDF(),
+      CloneStats.computeMutationFrequency(finalCloneSnapshot, lineages).orderBy("ancestorMutationId").toDF(),
       coalesce = true)
-
-    saveCSV(mullerPlotPath, mullerPlotData, mullerMutationNames)
   }
 }

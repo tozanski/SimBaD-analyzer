@@ -2,7 +2,7 @@ package analyzer
 
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.{Dataset, Encoders, SparkSession}
+import org.apache.spark.sql.{Dataset, DataFrame, Encoders, SparkSession}
 
 object Muller{
   def mullerOrder(lineages: Dataset[Ancestry] ): Dataset[MutationOrder] = {
@@ -74,6 +74,29 @@ object Muller{
       as[(Long, Double, Double)]
 
     mullerCumulatives
+  }
+
+
+  def compute(cloneSnapshots: Dataset[CloneSnapshot], largeMutations: Array[Long] ): DataFrame ={
+    val spark = cloneSnapshots.sparkSession
+    import spark.implicits._
+
+    //val defaultClone = ((null, 0, null, null)::Nil).toDF("mutationId", "count", "mutation", "ordering")
+    val mutationSet = spark.sparkContext.broadcast(largeMutations.toSet)
+    val collapseMutationId: Long => Long = x => if(mutationSet.value.contains(x)) x else 0
+    val collapseMutationsUDF = udf(collapseMutationId)
+
+    spark.sparkContext.setJobGroup("muller snapshot", "muller plot data snapshot")
+    cloneSnapshots.
+      withColumn("collapsedMutationId", collapseMutationsUDF($"mutationId")).
+      groupBy("timePoint").
+      pivot("collapsedMutationId", largeMutations).
+      agg(
+        //first(when(isnull(col("ordering")), lit(0)).otherwise(col("mutationId"))).as("mutationId"),
+
+        sum(coalesce(col("count"), lit(0))).as("count")
+      ).
+      na.fill(0)
   }
 
   def collect(clones: Dataset[Clone], mutationOrder: Dataset[MutationOrder]): Array[Long] = {
