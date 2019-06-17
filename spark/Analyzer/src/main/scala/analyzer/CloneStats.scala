@@ -1,5 +1,7 @@
 package analyzer
 
+import java.io.{File, PrintWriter}
+
 import analyzer.CloneStats.ScalarCloneStats
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.expressions.{MutableAggregationBuffer, UserDefinedAggregateFunction}
@@ -10,9 +12,9 @@ import org.apache.spark.sql.types.{ArrayType, DataType, FloatType, LongType, Str
 import scala.math.{floor, max, min}
 
 case class CloneStats(
+  timePoint: Double,
   scalarStats: ScalarCloneStats,
   histograms: CloneStats.CellHistogram
-
 )
 
 object CloneStats {
@@ -56,7 +58,7 @@ object CloneStats {
     ).alias("scalarStats")
   }
 
-  def compute(cloneSnapshots: DataFrame): Dataset[CloneStats] = {
+  def compute(cloneSnapshots: Dataset[CloneSnapshot]): Dataset[CloneStats] = {
     val systemSizes = cloneSnapshots.
       groupBy("timePoint").
       agg(
@@ -74,13 +76,17 @@ object CloneStats {
       withColumn("probability",
         col("count")/col("systemSize")
       ).
+      groupBy("timePoint").
       agg(aggregates.head, aggregates.tail:_*).
       as(Encoders.product[CloneStats])
   }
 
-  def collect(cloneSnapshots: DataFrame): Array[CloneStats] = {
+  def collect(cloneSnapshots: Dataset[CloneSnapshot]): Array[CloneStats] = {
     cloneSnapshots.sparkSession.sparkContext.setJobGroup("clone stats", "compute clone stats")
-    compute(cloneSnapshots).collect()
+    compute(cloneSnapshots).
+      coalesce(1).
+      sortWithinPartitions("timePoint").
+      collect()
   }
 
   def histogramAggregate(): Column = {
@@ -136,5 +142,38 @@ object CloneStats {
 
   }
 
+  def writeHistograms(pathPrefix: String, histograms: Dataset[CellHistogram]) = {
+
+    for (parameterName: String <- mutationParameterNames) {
+      histograms.
+        select(col(parameterName).as(ExpressionEncoder[Array[Long]])).
+        rdd.
+        map( _.mkString(":")).
+        saveAsTextFile(pathPrefix+"histogram_"+parameterName)
+    }
+  }
+  def writeHistograms(pathPrefix: String, histograms: Seq[CellHistogram]) = {
+    for (parameterName: String <- mutationParameterNames) {
+      val filePath = pathPrefix + "histogram_"+parameterName+".csv"
+      val pw = new PrintWriter(new File(filePath))
+      for (histogramPack: CellHistogram <- histograms) {
+        val histogramField = histogramPack.
+          getClass.
+          getDeclaredField(parameterName)
+        histogramField.setAccessible(true)
+
+        val histogram: Array[Long] = histogramField.
+          get(histogramPack).
+          asInstanceOf[Array[Long]]
+
+        pw.println(histogram.mkString(";"))
+      }
+      pw.close()
+    }
+  }
+  def writeScalars(filePath: String, stats: Seq[ScalarCloneStats] ) = {
+    val pw = new PrintWriter(new File(filePath))
+    stats.foreach(s=> pw.println(s.cloneCount + ";" + s.systemSize + ";" + s.entropy))
+  }
 
 }

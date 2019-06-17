@@ -1,8 +1,8 @@
 package analyzer
 
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.types.{IntegerType}
-import org.apache.spark.sql.{DataFrame, Dataset, Encoders, SparkSession}
+import org.apache.spark.sql.types.IntegerType
+import org.apache.spark.sql.{AnalysisException, DataFrame, Dataset, Encoders, SaveMode, SparkSession}
 
 object Snapshots{
   def snapshotsUdf(maxTime: Double) = udf(
@@ -66,6 +66,25 @@ object Snapshots{
         count(lit(1)).alias("count"),
         first(col("mutation")).alias("mutation")
       )
+  }
+
+  def computeOrReadCloneSnapshots(pathPrefix: String,
+                                  chronicles: Dataset[ChronicleEntry],
+                                  timePoints: Seq[Double]): Dataset[CloneSnapshot] ={
+    val spark = chronicles.sparkSession
+    val path = pathPrefix + "/clone_snapshots.parquet"
+    try{
+      spark.read.parquet(path).as(Encoders.product[CloneSnapshot])
+    } catch {
+      case _: AnalysisException =>
+        spark.sparkContext.setJobGroup("clone snapshots","save clone snapshots")
+        getCloneSnapshots(chronicles, timePoints).
+          write.
+          mode(SaveMode.Overwrite).
+          parquet(path)
+
+        spark.read.parquet(path).as(Encoders.product[CloneSnapshot])
+    }
   }
 
   def getSnapshotList(chronicles: Dataset[ChronicleEntry], timePoints: Iterable[Double]): Vector[Dataset[ChronicleEntry]] = {
