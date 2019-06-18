@@ -166,8 +166,8 @@ object Chronicler {
 
     spark.sparkContext.setCheckpointDir(pathPrefix + "/checkpoints/")
 
-    computeOrReadChronicles(spark, pathPrefix)
-    //writeLinearChronicles(spark, pathPrefix)
+    //computeOrReadChronicles(spark, pathPrefix)
+    writeLinearChronicles(spark, pathPrefix)
     //scala.io.StdIn.readLine()
   }
 }

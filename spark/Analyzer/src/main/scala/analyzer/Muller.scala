@@ -77,26 +77,32 @@ object Muller{
   }
 
 
-  def compute(cloneSnapshots: Dataset[CloneSnapshot], largeMutations: Array[Long] ): DataFrame ={
+  def writePlotData(path: String, cloneSnapshots: Dataset[CloneSnapshot], largeMutations: Seq[Long] ): Unit ={
     val spark = cloneSnapshots.sparkSession
     import spark.implicits._
 
-    //val defaultClone = ((null, 0, null, null)::Nil).toDF("mutationId", "count", "mutation", "ordering")
     val mutationSet = spark.sparkContext.broadcast(largeMutations.toSet)
     val collapseMutationId: Long => Long = x => if(mutationSet.value.contains(x)) x else 0
     val collapseMutationsUDF = udf(collapseMutationId)
 
     spark.sparkContext.setJobGroup("muller snapshot", "muller plot data snapshot")
-    cloneSnapshots.
+    val result = cloneSnapshots.
       withColumn("collapsedMutationId", collapseMutationsUDF($"mutationId")).
       groupBy("timePoint").
-      pivot("collapsedMutationId", largeMutations).
+      pivot("collapsedMutationId", 0+:largeMutations).
       agg(
         //first(when(isnull(col("ordering")), lit(0)).otherwise(col("mutationId"))).as("mutationId"),
 
         sum(coalesce(col("count"), lit(0))).as("count")
       ).
-      na.fill(0)
+      na.fill(0).
+      orderBy("timePoint")
+
+    spark.sparkContext.setJobGroup("muller plot data", "write muller plot data")
+    Analyzer.saveCSV(path, result, coalesce = true)
+
+    mutationSet.destroy()
+
   }
 
   def collect(clones: Dataset[Clone], mutationOrder: Dataset[MutationOrder]): Array[Long] = {

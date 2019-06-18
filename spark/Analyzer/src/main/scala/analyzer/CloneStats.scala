@@ -6,10 +6,11 @@ import analyzer.CloneStats.ScalarCloneStats
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.expressions.{MutableAggregationBuffer, UserDefinedAggregateFunction}
 import org.apache.spark.sql.{Column, DataFrame, Dataset, Encoders, Row}
-import org.apache.spark.sql.functions.{col, count, explode, first, lit, log2, struct, sum}
+import org.apache.spark.sql.functions.{avg, col, count, explode, first, lit, log2, struct, sum}
 import org.apache.spark.sql.types.{ArrayType, DataType, FloatType, LongType, StructField, StructType}
 
 import scala.math.{floor, max, min}
+import analyzer.expression.functions.{weightedAvg, weightedStdDev}
 
 case class CloneStats(
   timePoint: Double,
@@ -36,7 +37,15 @@ object CloneStats {
   case class ScalarCloneStats(
     cloneCount: Long,
     systemSize: Long,
-    entropy: Double
+    entropy: Double,
+
+    mean_birth_efficiency: Double, mean_birth_resistance: Double,
+    mean_lifespan_efficiency: Double, mean_lifespan_resistance: Double,
+    mean_success_efficiency: Double, mean_success_resistance: Double,
+
+    stddev_birth_efficiency: Double, stddev_birth_resistance: Double,
+    stddev_lifespan_efficiency: Double, stddev_lifespan_resistance: Double,
+    stddev_success_efficiency: Double, stddev_success_resistance: Double
   )
 
   def computeMutationFrequency(clones: Dataset[Clone], lineages: Dataset[Ancestry]): Dataset[(Long, Long)] = {
@@ -54,7 +63,21 @@ object CloneStats {
     struct(
       count(lit(1)).alias("cloneCount"),
       first("systemSize").alias("systemSize"),
-      sum(col("probability") * -log2("probability") ).alias("entropy")
+      sum(col("probability") * -log2("probability") ).alias("entropy"),
+
+      weightedAvg(col("mutation.birthEfficiency"), col("count")).alias("mean_birth_efficiency"),
+      weightedAvg(col("mutation.birthResistance"), col("count")).alias("mean_birth_resistance"),
+      weightedAvg(col("mutation.lifespanEfficiency"), col("count")).alias("mean_lifespan_efficiency"),
+      weightedAvg(col("mutation.lifespanResistance"), col("count")).alias("mean_lifespan_resistance"),
+      weightedAvg(col("mutation.successEfficiency"), col("count")).alias("mean_success_efficiency"),
+      weightedAvg(col("mutation.successResistance"), col("count")).alias("mean_success_resistance"),
+
+      weightedStdDev(col("mutation.birthEfficiency"), col("count")).alias("stddev_birth_efficiency"),
+      weightedStdDev(col("mutation.birthResistance"), col("count")).alias("stddev_birth_resistance"),
+      weightedStdDev(col("mutation.lifespanEfficiency"), col("count")).alias("stddev_lifespan_efficiency"),
+      weightedStdDev(col("mutation.lifespanResistance"), col("count")).alias("stddev_lifespan_resistance"),
+      weightedStdDev(col("mutation.successEfficiency"), col("count")).alias("stddev_success_efficiency"),
+      weightedStdDev(col("mutation.successResistance"), col("count")).alias("stddev_success_resistance")
     ).alias("scalarStats")
   }
 
@@ -90,56 +113,10 @@ object CloneStats {
   }
 
   def histogramAggregate(): Column = {
-    val hist = new HistogramUDAF
+    val hist = new expression.HistogramUDAF
     val aggregates = mutationParameterNames.
       map(x => hist.apply(col("mutation."+ x), col("count")).alias(x))
     struct(aggregates:_*).alias("histograms")
-  }
-
-  class HistogramUDAF extends UserDefinedAggregateFunction {
-
-    override def inputSchema:StructType = StructType(
-      StructField("value", FloatType)::
-      StructField("weight", LongType)::
-      Nil
-    )
-
-    override def bufferSchema: StructType = StructType(StructField("counts", ArrayType(LongType))::Nil)
-
-    override def dataType: DataType = ArrayType(LongType)
-
-    override def deterministic: Boolean = true
-
-    override def initialize(buffer: MutableAggregationBuffer): Unit = {
-      buffer(0) = Array.fill[Long](100)(0l)
-    }
-
-    override def update(buffer: MutableAggregationBuffer, input: Row): Unit = {
-      if(input.isNullAt(0))
-        return
-
-      val num_bins = 100
-
-      val param_value: Float = input.getAs[Float](0)
-      val param_count: Long = input.getAs[Long](1)
-
-      val bin_number: Int = math.min(num_bins-1, math.max(0, math.floor(param_value * num_bins).toInt))
-
-      val bins: Array[Long]  = buffer.getSeq[Long](0).toArray[Long]
-      bins(bin_number) += param_count
-      buffer(0) = bins
-    }
-
-    override def merge(buffer1: MutableAggregationBuffer, buffer2: Row): Unit = {
-      val arr1 = buffer1.getSeq[Long](0)
-      val arr2 = buffer2.getSeq[Long](0)
-
-      val result = (arr1, arr2).zipped.map(_ + _)
-      buffer1(0) = result
-    }
-
-    override def evaluate(buffer: Row): Any = buffer.getAs[Array[Long]](0)
-
   }
 
   def writeHistograms(pathPrefix: String, histograms: Dataset[CellHistogram]) = {
@@ -171,9 +148,18 @@ object CloneStats {
       pw.close()
     }
   }
-  def writeScalars(filePath: String, stats: Seq[ScalarCloneStats] ) = {
-    val pw = new PrintWriter(new File(filePath))
-    stats.foreach(s=> pw.println(s.cloneCount + ";" + s.systemSize + ";" + s.entropy))
-  }
 
+  def writeScalars(filePath: String, stats: Seq[ScalarCloneStats]) = {
+    val pw = new PrintWriter(new File(filePath))
+    stats.foreach(stat => {
+      stat.getClass.getDeclaredFields.foreach(
+        field => {
+          field.setAccessible(true)
+          pw.print(field.get(stat))
+        }
+      )
+      pw.println()
+    })
+    pw.close()
+  }
 }
