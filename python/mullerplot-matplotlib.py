@@ -105,8 +105,12 @@ if __name__ == '__main__':
         sm._A = []
         colorbar = plt.colorbar(sm)
         colorbar.set_label(val, size='xx-large')
-        plt.savefig(outputFile+val+'.png', dpi=600)
-        plt.close()
+
+        outputFienName = outputFile+val+'.png'
+        plt.savefig(outputFienName, dpi=150)
+        plt.cla()
+        plt.clf()
+        plt.close(fig)
         # plt.show()
 
 print("That's all.")
