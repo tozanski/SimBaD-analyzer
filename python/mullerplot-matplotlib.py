@@ -70,8 +70,9 @@ if __name__ == '__main__':
     next(params)
     for idx, val in enumerate(params):
         stat = paramsData[val].values
-        stat = np.append(0,stat) # first row = param value for mutation_id=0
-        #stat = np.column_stack((np.zeros(np.shape(stat)[0]), stat))
+        stat = np.append(0, stat)
+        # first row = param value for mutation_id=0
+        # stat = np.column_stack((np.zeros(np.shape(stat)[0]), stat))
         clist = buildColorsList(stat, cmap)
         # cmap = colors.LinearSegmentedColormap.from_list('my_cmap',clist)
 

@@ -15,7 +15,7 @@
             //          "-p", "../test_data/muller_data_params.csv",
             //          "-o", "./testMuller_"
             "args": ["-i", "../test_data/final_mutation_freq.csv",
-                     "-t", "10",
+                     "-t", "11",
                      "-o", "out"
             ]
         }
