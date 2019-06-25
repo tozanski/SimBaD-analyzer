@@ -10,10 +10,13 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "args" : ["-i", "../test_data/muller_data.csv",
-                      "-s", "../test_data/stats.csv",
-                      "-p", "../test_data/muller_data_params.csv",
-                      "-o", "./testMuller_"
+            //"args" : ["-i", "../test_data/muller_data.csv",
+            //          "-s", "../test_data/stats.csv",
+            //          "-p", "../test_data/muller_data_params.csv",
+            //          "-o", "./testMuller_"
+            "args": ["-i", "../test_data/final_mutation_freq.csv",
+                     "-t", "10",
+                     "-o", "out"
             ]
         }
     ]
