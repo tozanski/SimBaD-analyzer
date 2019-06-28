@@ -6,7 +6,7 @@ import analyzer.CloneStats.ScalarCloneStats
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.expressions.{MutableAggregationBuffer, UserDefinedAggregateFunction}
 import org.apache.spark.sql.{Column, DataFrame, Dataset, Encoders, Row}
-import org.apache.spark.sql.functions.{avg, col, count, explode, first, lit, log2, struct, sum}
+import org.apache.spark.sql.functions.{avg, col, count, explode, first, lit, log2, struct, sum, udf}
 import org.apache.spark.sql.types.{ArrayType, DataType, FloatType, LongType, StructField, StructType}
 
 import scala.math.{floor, max, min}
@@ -82,7 +82,8 @@ object CloneStats {
   }
 
   def compute(cloneSnapshots: Dataset[CloneSnapshot]): Dataset[CloneStats] = {
-    val systemSizes = cloneSnapshots.
+    cloneSnapshots.sparkSession.sparkContext.setJobGroup("system sizes", "collect system sizes")
+    val systemSizes: Map[Double, Long] = cloneSnapshots.
       groupBy("timePoint").
       agg(
         sum(col("count")).alias("systemSize")
@@ -90,12 +91,16 @@ object CloneStats {
       select(
         col("timePoint").as(Encoders.scalaDouble),
         col("systemSize").as(Encoders.scalaLong)
-      )
+      ).collect().toMap
+
+    val systemSizesBc = cloneSnapshots.sparkSession.sparkContext.broadcast(systemSizes)
+    val mapSystemSizeUDF = udf( (x:Double) => systemSizesBc.value.get(x))
 
     val aggregates = histogramAggregate() :: scalarAggregate() :: Nil
 
+    cloneSnapshots.sparkSession.sparkContext.setJobGroup("clone stats", "compute clone stats")
     cloneSnapshots.
-      join(systemSizes, "timePoint").
+      withColumn("systemSize", mapSystemSizeUDF(col("timePoint"))).
       withColumn("probability",
         col("count")/col("systemSize")
       ).
@@ -107,8 +112,7 @@ object CloneStats {
   def collect(cloneSnapshots: Dataset[CloneSnapshot]): Array[CloneStats] = {
     cloneSnapshots.sparkSession.sparkContext.setJobGroup("clone stats", "compute clone stats")
     compute(cloneSnapshots).
-      coalesce(1).
-      sortWithinPartitions("timePoint").
+      orderBy("timePoint").
       collect()
   }
 

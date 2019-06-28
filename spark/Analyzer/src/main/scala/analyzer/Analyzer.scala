@@ -105,7 +105,7 @@ object Analyzer {
     val timePoints = (0d until maxTime by 1.0d) :+ maxTime
     saveCSV(pathPrefix + "/time_points.csv", timePoints)
 
-    val cloneSnapshots = Snapshots.computeOrReadCloneSnapshots(pathPrefix, chronicles, timePoints)
+    val cloneSnapshots = Snapshots.computeOrReadCloneSnapshots(pathPrefix, chronicles, timePoints, partitionByTime = false)
 
     val cloneStats = CloneStats.collect(cloneSnapshots)
     CloneStats.writeHistograms(pathPrefix, cloneStats.map(_.histograms))

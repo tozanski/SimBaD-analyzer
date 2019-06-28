@@ -70,7 +70,8 @@ object Snapshots{
 
   def computeOrReadCloneSnapshots(pathPrefix: String,
                                   chronicles: Dataset[ChronicleEntry],
-                                  timePoints: Seq[Double]): Dataset[CloneSnapshot] ={
+                                  timePoints: Seq[Double],
+                                  partitionByTime: Boolean = false): Dataset[CloneSnapshot] ={
     val spark = chronicles.sparkSession
     val path = pathPrefix + "/clone_snapshots.parquet"
     try{
@@ -80,6 +81,7 @@ object Snapshots{
         spark.sparkContext.setJobGroup("clone snapshots","save clone snapshots")
         getCloneSnapshots(chronicles, timePoints).
           write.
+          partitionBy("timePoint").
           mode(SaveMode.Overwrite).
           parquet(path)
 
