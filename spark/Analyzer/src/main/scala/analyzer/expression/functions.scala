@@ -10,7 +10,6 @@ object functions {
     new Column(func.toAggregateExpression(isDistinct))
   }
   //
-  def sequentialGroup(marker: Column): Column = withExpr { SequentialGroup(marker.expr) }
   def eventGroup(marker: Column): Column = withExpr{ EventGroup(marker.expr) }
   def weightedAvg(value: Column, count: Column): Column = withAggregateFunction { WeightedAvg(value.expr, count.expr) }
   def weightedStdDev(value: Column, count: Column): Column = withAggregateFunction { WeightedStdDev(value.expr, count.expr) }

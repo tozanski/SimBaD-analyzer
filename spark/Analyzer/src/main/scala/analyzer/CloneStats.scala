@@ -6,7 +6,7 @@ import analyzer.CloneStats.ScalarCloneStats
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.expressions.{MutableAggregationBuffer, UserDefinedAggregateFunction}
 import org.apache.spark.sql.{Column, DataFrame, Dataset, Encoders, Row}
-import org.apache.spark.sql.functions.{avg, col, count, explode, first, lit, log2, struct, sum, udf}
+import org.apache.spark.sql.functions.{avg, broadcast, col, count, explode, first, lit, log2, struct, sum, udf}
 import org.apache.spark.sql.types.{ArrayType, DataType, FloatType, LongType, StructField, StructType}
 
 import scala.math.{floor, max, min}
@@ -81,7 +81,8 @@ object CloneStats {
     ).alias("scalarStats")
   }
 
-  def compute(cloneSnapshots: Dataset[CloneSnapshot]): Dataset[CloneStats] = {
+  def collect(cloneSnapshots: Dataset[CloneSnapshot]): Array[CloneStats] = {
+
     cloneSnapshots.sparkSession.sparkContext.setJobGroup("system sizes", "collect system sizes")
     val systemSizes: Map[Double, Long] = cloneSnapshots.
       groupBy("timePoint").
@@ -96,24 +97,23 @@ object CloneStats {
     val systemSizesBc = cloneSnapshots.sparkSession.sparkContext.broadcast(systemSizes)
     val mapSystemSizeUDF = udf( (x:Double) => systemSizesBc.value.get(x))
 
+
     val aggregates = histogramAggregate() :: scalarAggregate() :: Nil
 
     cloneSnapshots.sparkSession.sparkContext.setJobGroup("clone stats", "compute clone stats")
-    cloneSnapshots.
+    val result = cloneSnapshots.
       withColumn("systemSize", mapSystemSizeUDF(col("timePoint"))).
       withColumn("probability",
         col("count")/col("systemSize")
       ).
       groupBy("timePoint").
       agg(aggregates.head, aggregates.tail:_*).
-      as(Encoders.product[CloneStats])
-  }
-
-  def collect(cloneSnapshots: Dataset[CloneSnapshot]): Array[CloneStats] = {
-    cloneSnapshots.sparkSession.sparkContext.setJobGroup("clone stats", "compute clone stats")
-    compute(cloneSnapshots).
-      orderBy("timePoint").
+      as(Encoders.product[CloneStats]).
+       orderBy("timePoint").
       collect()
+
+    systemSizesBc.unpersist()
+    result
   }
 
   def histogramAggregate(): Column = {
