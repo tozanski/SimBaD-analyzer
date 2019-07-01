@@ -93,6 +93,7 @@ object Analyzer {
     val cloneStatsPath = pathPrefix + "/clone_stats.csv"
     val mullerPlotDataPath = pathPrefix + "/muller_data.csv"
     val finalMutationFrequencyPath = pathPrefix + "/final_mutation_freq.csv"
+    val cloneCountsPath = pathPrefix + "/clone_counts.parquet"
 
     val chronicles = Chronicler.
       computeOrReadChronicles(spark, pathPrefix)
@@ -167,7 +168,7 @@ object Analyzer {
       ).orderBy("ancestorMutationId").toDF(),
       coalesce = true)
 
-    saveParquet(pathPrefix + "clone_counts.parquet", Phylogeny.mutationCounts(lineages, finalClones).toDF(), coalesce=false)
+    saveParquet(cloneCountsPath, Phylogeny.mutationCounts(lineages, finalClones).toDF(), coalesce=false)
     finalClones.unpersist()
 
   }
