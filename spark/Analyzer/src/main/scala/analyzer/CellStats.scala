@@ -2,7 +2,7 @@ package analyzer
 
 import java.io.{File, PrintWriter}
 
-import analyzer.CloneStats.ScalarCloneStats
+import analyzer.CellStats.ScalarCloneStats
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.expressions.{MutableAggregationBuffer, UserDefinedAggregateFunction}
 import org.apache.spark.sql.{Column, DataFrame, Dataset, Encoders, Row}
@@ -12,13 +12,13 @@ import org.apache.spark.sql.types.{ArrayType, DataType, FloatType, LongType, Str
 import scala.math.{floor, max, min}
 import analyzer.expression.functions.{weightedAvg, weightedStdDev}
 
-case class CloneStats(
+case class CellStats(
   timePoint: Double,
   scalarStats: ScalarCloneStats,
-  histograms: CloneStats.CellHistogram
+  histograms: CellStats.CellHistogram
 )
 
-object CloneStats {
+object CellStats {
   val mutationParameterNames: Seq[String] =
     "birthEfficiency" :: "birthResistance" ::
     "lifespanEfficiency" :: "lifespanResistance" ::
@@ -81,7 +81,7 @@ object CloneStats {
     ).alias("scalarStats")
   }
 
-  def collect(cloneSnapshots: Dataset[CloneSnapshot]): Array[CloneStats] = {
+  def collect(cloneSnapshots: Dataset[CloneSnapshot]): Array[CellStats] = {
 
     cloneSnapshots.sparkSession.sparkContext.setJobGroup("system sizes", "collect system sizes")
     val systemSizes: Map[Double, Long] = cloneSnapshots.
@@ -108,7 +108,7 @@ object CloneStats {
       ).
       groupBy("timePoint").
       agg(aggregates.head, aggregates.tail:_*).
-      as(Encoders.product[CloneStats]).
+      as(Encoders.product[CellStats]).
        orderBy("timePoint").
       collect()
 

@@ -1,6 +1,6 @@
 package analyzer
 
-import org.apache.spark.sql.functions.col
+import org.apache.spark.sql.functions.{col, explode, first, sum}
 import org.apache.spark.sql.{Dataset, Encoders, SaveMode, SparkSession}
 import org.apache.spark.storage.StorageLevel
 
@@ -28,20 +28,6 @@ object Phylogeny  {
       ).
       as(Encoders.product[MutationTreeLink])
   }
-
-/*
-    val pathPrefix = "/scratch/WCSS/20190110-202151-334492354-simulation-test/"
-
-    case class MutationTreeLink(mutationId: Long, parentId: Long)
-    case class Ancestry(mutationId: Long, ancestors: Array[Long])
-
-    val mutations = spark.
-      read.parquet(pathPrefix + "/mutationTree.parquet").
-      select("id", "parentId").
-      as[(Long,Long)].
-      withColumnRenamed("id","mutationId").
-      as[MutationTreeLink]
-*/
 
   def writeLineage(spark: SparkSession,
               pathPrefix: String,
@@ -131,6 +117,24 @@ object Phylogeny  {
       parquet(lineagesPath).
       as[Ancestry]
   }
+
+  def mutationCounts(lineages: Dataset[Ancestry], clones: Dataset[Clone]): Dataset[MutationCount] = {
+    val accumulatedCounts = clones.
+      join(lineages, Seq("mutationId"), "right" ).
+      na.fill(0).
+      withColumn("ancestorId", explode(col("ancestors"))).
+      groupBy("ancestorId").
+      agg(
+        sum("count").as("mutationCount")
+      ).
+      withColumnRenamed("ancestorId", "mutationId")
+
+    clones.
+      withColumnRenamed("count", "typeCount").
+      join(accumulatedCounts, Seq("mutationId"), "right").
+      as(Encoders.product[MutationCount])
+  }
+
   def getOrComputeMutationTree(spark: SparkSession, pathPrefix: String, chronicles: Dataset[ChronicleEntry]): Dataset[MutationTreeLink] = {
     import spark.implicits._
 
@@ -159,6 +163,7 @@ object Phylogeny  {
         spark.read.parquet(lineagesPath).as[Ancestry]
       }
     }
+
 
   def main(args: Array[String]) = {
     if( args.length != 1 )

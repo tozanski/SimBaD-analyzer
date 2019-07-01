@@ -102,4 +102,4 @@ case class CloneSnapshot(timePoint: Double, mutationId: Long, mutation: Mutation
 case class MutationTreeLink(mutationId: Long, parentMutationId: Long)
 case class Ancestry(mutationId: Long, ancestors: Array[Long])
 case class MutationOrder(mutationId: Long, ordering: Long)
-
+case class MutationCount(mutationId: Long, mutation: Mutation, typeCount: Long, mutationCount: Long, ancestors: Array[Long])

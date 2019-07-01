@@ -107,8 +107,8 @@ object Analyzer {
 
     val cloneSnapshots = Snapshots.computeOrReadCloneSnapshots(pathPrefix, chronicles, timePoints, partitionByTime = false)
 
-    val cloneStats = CloneStats.collect(cloneSnapshots)
-    CloneStats.writeHistograms(pathPrefix, cloneStats.map(_.histograms))
+    val cloneStats = CellStats.collect(cloneSnapshots)
+    CellStats.writeHistograms(pathPrefix, cloneStats.map(_.histograms))
     saveCSV(cloneStatsPath, cloneStats.map(_.scalarStats).toSeq.toDS().toDF(), coalesce = true)
 
     val largeMutations: Dataset[(Long, Mutation)] = chronicles.
@@ -157,13 +157,18 @@ object Analyzer {
     val finalCellSnapshot = Snapshots.getFinalCells(chronicles)
     saveCSV(finalSnapshotPath, finalCellSnapshot, coalesce = false)
 
+    val finalClones = cloneSnapshots.filter(col("timePoint") === maxTime).as[Clone].persist()
     spark.sparkContext.setJobGroup("frequency histogram", "save mutation frequency histogram")
     saveCSV(
       finalMutationFrequencyPath,
-      CloneStats.computeMutationFrequency(
-        cloneSnapshots.filter(col("timePoint") === maxTime).as[Clone],
+      CellStats.computeMutationFrequency(
+        finalClones,
         lineages
       ).orderBy("ancestorMutationId").toDF(),
       coalesce = true)
+
+    saveParquet(pathPrefix + "clone_counts.parquet", Phylogeny.mutationCounts(lineages, finalClones).toDF(), coalesce=false)
+    finalClones.unpersist()
+
   }
 }
