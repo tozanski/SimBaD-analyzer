@@ -132,6 +132,7 @@ object Phylogeny  {
     clones.
       withColumnRenamed("count", "typeCount").
       join(accumulatedCounts, Seq("mutationId"), "right").
+      join(lineages, Seq("mutationId")).
       as(Encoders.product[MutationCount])
   }
 
