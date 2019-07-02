@@ -165,7 +165,7 @@ object Phylogeny  {
       }
     }
 
-
+/*
   def main(args: Array[String]) = {
     if( args.length != 1 )
       throw new RuntimeException("no prefix path given")
@@ -192,5 +192,5 @@ object Phylogeny  {
       true)
 
     */
-  }
+  }*/
 }

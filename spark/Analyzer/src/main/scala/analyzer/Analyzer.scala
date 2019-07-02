@@ -18,14 +18,14 @@ object Analyzer {
     chronicles.agg( max("birthTime") ).head().getDouble(0)
   }
 
-  def saveParquet(path: String, dataFrame: DataFrame, coalesce: Boolean){
+  def saveParquet(path: String, dataFrame: DataFrame, coalesce: Boolean): Unit = {
     var df = dataFrame
     if(coalesce)
       df = df.coalesce(1)
     df.write.mode(SaveMode.Overwrite).parquet(path)
   }
 
-  def saveCSV(path: String, dataFrame: DataFrame, coalesce: Boolean ){
+  def saveCSV(path: String, dataFrame: DataFrame, coalesce: Boolean ): Unit = {
     var df = dataFrame
     if(coalesce)
       df = df.coalesce(1)
@@ -36,22 +36,18 @@ object Analyzer {
       mode(SaveMode.Overwrite).csv(path)
   }
 
-  def saveCSV[T,S](filePath: String, data: Seq[Array[T]], columnNames: Seq[S]) = {
+  def saveCSV[T,S](filePath: String, data: Seq[Array[T]], columnNames: Seq[S]): Unit = {
     val pw = new PrintWriter(new File(filePath))
     pw.println(columnNames.mkString(";"))
     data.foreach( line => pw.println(line.mkString(";")) )
     pw.close()
   }
 
-  def saveCSV[T](filePath: String, data: Seq[T]) = {
+  def saveCSV[T](filePath: String, data: Seq[T]): Unit = {
     val pw = new PrintWriter(new File(filePath))
     data.foreach( datum => pw.println(datum))
     pw.close()
   }
-
-
-
-
 
   def notNullableSchema(schema: StructType) : StructType = {
     StructType( schema.map{
@@ -76,27 +72,32 @@ object Analyzer {
 
   def main(args: Array[String]) {
 
-    if( args.length != 1 )
-      throw new RuntimeException("no prefix path given")
+    if( args.length < 1)
+      throw new RuntimeException("no stream path given")
+    if (args.length < 2)
+      throw new RuntimeException("no output directory given")
 
-    val pathPrefix = args(0)
+    val streamPath = args(0) + "/"
+    val outputDirectory = args(1) + "/"
 
     val spark = SparkSession.builder.
       appName("SimBaD analyzer").
       getOrCreate()
 
-    spark.sparkContext.setCheckpointDir(pathPrefix + "/checkpoints/")
+    spark.sparkContext.setCheckpointDir(outputDirectory + "checkpoints/")
 
     import spark.implicits._
 
-    val finalSnapshotPath = pathPrefix + "/final_snapshot.csv"
-    val cloneStatsPath = pathPrefix + "/clone_stats.csv"
-    val mullerPlotDataPath = pathPrefix + "/muller_data.csv"
-    val finalMutationFrequencyPath = pathPrefix + "/final_mutation_freq.csv"
-    val cloneCountsPath = pathPrefix + "/clone_counts.parquet"
+    val timePointsPath = outputDirectory + "timePoints.csv"
+    val largeMutationsPath = outputDirectory + "large_mutations.csv"
+    val finalSnapshotPath = outputDirectory + "final_snapshot.csv"
+    val cloneStatsPath = outputDirectory + "clone_stats.csv"
+    val mullerPlotDataPath = outputDirectory + "muller_data.csv"
+    val finalMutationFrequencyPath = outputDirectory + "final_mutation_freq.csv"
+    val cloneCountsPath = outputDirectory + "clone_counts.parquet"
 
     val chronicles = Chronicler.
-      computeOrReadChronicles(spark, pathPrefix)
+      computeOrReadChronicles(spark, streamPath, outputDirectory)
       //.coalesce(2). // debug only
       //persist() // debug only
 
@@ -104,12 +105,12 @@ object Analyzer {
     //val maxTime = 20.0 // debug only
 
     val timePoints = (0d until maxTime by 1.0d) :+ maxTime
-    saveCSV(pathPrefix + "/time_points.csv", timePoints)
+    saveCSV(timePointsPath, timePoints)
 
-    val cloneSnapshots = Snapshots.computeOrReadCloneSnapshots(pathPrefix, chronicles, timePoints, partitionByTime = false)
+    val cloneSnapshots = Snapshots.computeOrReadCloneSnapshots(outputDirectory, chronicles, timePoints, partitionByTime = false)
 
     val cloneStats = CellStats.collect(cloneSnapshots)
-    CellStats.writeHistograms(pathPrefix, cloneStats.map(_.histograms))
+    CellStats.writeHistograms(outputDirectory, cloneStats.map(_.histograms))
     saveCSV(cloneStatsPath, cloneStats.map(_.scalarStats).toSeq.toDS().toDF(), coalesce = true)
 
     val largeMutations: Dataset[(Long, Mutation)] = chronicles.
@@ -124,8 +125,8 @@ object Analyzer {
     spark.sparkContext.setJobGroup("large mutations", "count large mutations")
     println("Large mutation count" + largeMutations.count())
 
-    val mutationTree = Phylogeny.getOrComputeMutationTree(spark, pathPrefix, chronicles)
-    val lineages = Phylogeny.getOrComputeLineages(spark, pathPrefix, mutationTree)
+    val mutationTree = Phylogeny.getOrComputeMutationTree(spark, outputDirectory, chronicles)
+    val lineages = Phylogeny.getOrComputeLineages(spark, outputDirectory, mutationTree)
 
     spark.sparkContext.setJobGroup("muller order", "collect muller order for large mutations")
     val largeMullerOrder: Array[MutationOrder] = Muller.mullerOrder(
@@ -137,7 +138,7 @@ object Analyzer {
       collect()
 
     spark.sparkContext.setJobGroup("large mutations", "save large mutations")
-    saveCSV(pathPrefix+"/large_mutations.csv",
+    saveCSV(largeMutationsPath,
       largeMutations.join(broadcast(largeMullerOrder.toSeq.toDS()), "mutationId").
         orderBy("ordering").
         select(
@@ -158,7 +159,11 @@ object Analyzer {
     val finalCellSnapshot = Snapshots.getFinalCells(chronicles)
     saveCSV(finalSnapshotPath, finalCellSnapshot, coalesce = false)
 
-    val finalClones = cloneSnapshots.filter(col("timePoint") === maxTime).as[Clone].persist()
+    val finalClones = cloneSnapshots.
+      filter(col("timePoint") === maxTime).
+      drop("timePoint").
+      as[Clone].persist()
+
     spark.sparkContext.setJobGroup("frequency histogram", "save mutation frequency histogram")
     saveCSV(
       finalMutationFrequencyPath,
