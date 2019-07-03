@@ -121,3 +121,5 @@ join -t ";" -a 1 -o'0,1.2,2.3,1.4,1.5,1.6,1.7,1.8,1.9,1.10,1.11,1.12,1.13,1.14,1
   <(tail -n +2 "$SETTLERS_FIFO" | sort -k1,1 -t ";") \
   <(tee "$OUTPUT_PATH" < "$OFFSPRINGS_FIFO" | tail -n +2 "$OFFSPRINGS_FIFO" | sort -k1,1 -t ";") \
   >> "$OUTPUT_PATH"
+
+rm "$SETTLERS_FIFO" "$OFFSPRINGS_FIFO" "$RESOLVED_SETTLERS_FIFO"
