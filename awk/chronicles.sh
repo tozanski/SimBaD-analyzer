@@ -1,14 +1,25 @@
 #!/bin/bash
 set -Eeuxo pipefail
 
+if [ $# -ne 2 ];
+  then echo "usage chroncicles.sh [stream_path] [initial_path]" >&2
+  exit 1
+fi
+
 STREAM_PATH=$1
+INITIAL_PATH=$2
 
-INITIAL_PATH=initial.csv
+OUTPUT_PATH=chronciles.csv
 
-# decompress the stream, enumerate events and extract the fields needed to chronicles
-gzcat "$STREAM_PATH" \
-    | tail -n +2 \
-    | awk -F ";" '
+SETTLERS_FIFO=`mktemp -u`
+OFFSPRINGS_FIFO=`mktemp -u`
+RESOLVED_SETTLERS_FIFO=`mktemp -u`
+
+mkfifo -m 600 "$SETTLERS_FIFO" "$OFFSPRINGS_FIFO" "$RESOLVED_SETTLERS_FIFO"
+
+gzcat "$STREAM_PATH" |    # decompress the stream
+  tail -n +2 |            # drop header line
+  awk -F ";" '            
 BEGIN{
   delta = 0
   prev_delta = 0
@@ -22,21 +33,16 @@ BEGIN{
     eid++
     
   print $1 ";" $2 ";" $3 ";" eid ";" $18 ";" $19 ";" $20  ";" $13 ";" $7 ";" $8 ";" $9 ";" $10 ";" $11 ";" $12 
-}' \
-  > clean_stream.csv
-
-#sort by position, effectively partitioning the data by position     
-{ cat "$INITIAL_PATH" && tail -n +2 clean_stream.csv ; } | \
-    sort  -k1,3 -t ";" --stable \
-    > pos_stream.csv
-
-# for each position extract the birth and death time
-cat pos_stream.csv | awk -F ";" '
+}' |                                      # enumerate events and extract the fields needed to chronicles
+  tail -n +2 |                            # drop headers from cleaned stream
+  cat "$INITIAL_PATH" - |                 # include initial configuration
+  sort  -k1,3 -t ";" --stable |     # sort by position, effectively partitioning the data by position
+  awk -F ";" -v OFFSPRINGS_FILE="$OFFSPRINGS_FIFO" -v SETTLERS_FILE="$SETTLERS_FIFO" '
 function print_entry(parent_id, death_time){
-  if (parent_id)
-    print  eid ";" pid ";" parent_id ";" prev_time ";" death_time ";" x ";" y ";" z ";" mid ";" be ";" br ";" le ";" lr ";" se ";" sr > "offsprings.csv"
-  else
-    print  eid ";" pid ";" parent_id ";" prev_time ";" death_time ";" x ";" y ";" z ";" mid ";" be ";" br ";" le ";" lr ";" se ";" sr > "settlers.csv"
+  if (parent_id)  # parent != 0 is offspring
+    print  eid ";" pid ";" parent_id ";" prev_time ";" death_time ";" x ";" y ";" z ";" mid ";" be ";" br ";" le ";" lr ";" se ";" sr > OFFSPRINGS_FILE
+  else            # parent == 0 is settler
+    print  eid ";" pid ";" parent_id ";" prev_time ";" death_time ";" x ";" y ";" z ";" mid ";" be ";" br ";" le ";" lr ";" se ";" sr > SETTLERS_FILE
 }
 BEGIN{
   pid = 0
@@ -46,8 +52,9 @@ BEGIN{
   prev_time = 0
   prev_ekind = 0
   prev_parent = 0
-  print "event_id ; particle_id ; parent_id ; birth_time ; death_time ; x ; y ; z ; mut_id ; be ; br ; le ; lr ; se ; sr" > "settlers.csv"
-  print "event_id ; particle_id ; parent_id ; birth_time ; death_time ; x ; y ; z ; mut_id ; be ; br ; le ; lr ; se ; sr" > "offsprings.csv"
+
+  print "event_id ; particle_id ; parent_id ; birth_time ; death_time ; x ; y ; z ; mut_id ; be ; br ; le ; lr ; se ; sr" > OFFSPRINGS_FILE
+  print "event_id ; particle_id ; parent_id ; birth_time ; death_time ; x ; y ; z ; mut_id ; be ; br ; le ; lr ; se ; sr" > SETTLERS_FILE
 }
 {
   # the particle is effecitvely buffered in memory
@@ -108,13 +115,9 @@ END{
   else if (prev_ekind == 4)
     print_entry(prev_parent, "inf") 
 }
-' 
+' &
 
-#tail -n +2 settlers.csv | sort -k1,1 -t ";" > sorted_settlers.csv &
-#tail -n +2 offsprings.csv | sort -k1,1 -t ";" > sorted_offsprings.csv 
-
-#join -t ";" -a 1 -o'0,1.2,2.3,1.4,1.5,1.6,1.7,1.8,1.9,1.10,1.11,1.12,1.13,1.14,1.15,1.16'  sorted_settlers.csv sorted_offsprings.csv > resolved_settlers.csv
 join -t ";" -a 1 -o'0,1.2,2.3,1.4,1.5,1.6,1.7,1.8,1.9,1.10,1.11,1.12,1.13,1.14,1.15,1.16'  \
-  <(ail -n +2 settlers.csv | sort -k1,1 -t ";") \
-  <(tail -n +2 offsprings.csv | sort -k1,1 -t ";") \
-  > resolved_settlers.csv
+  <(tail -n +2 "$SETTLERS_FIFO" | sort -k1,1 -t ";") \
+  <(tee "$OUTPUT_PATH" < "$OFFSPRINGS_FIFO" | tail -n +2 "$OFFSPRINGS_FIFO" | sort -k1,1 -t ";") \
+  >> "$OUTPUT_PATH"
