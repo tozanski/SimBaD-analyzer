@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-""" Muller like plots with params values as color decoded...
-"""
 import pandas as pd
 import numpy as np
 import tqdm
@@ -55,7 +53,8 @@ def getData(fileName, header=0):
 
 if __name__ == '__main__':
 
-    inputFile, timeFile, statsFile, paramsFile, outputFile = get_args(sys.argv[1:])
+    inputFile, timeFile, statsFile, paramsFile, outputFile \
+        = get_args(sys.argv[1:])
 
     data = getData(inputFile, header=None)
     time = getData(timeFile)
@@ -65,7 +64,7 @@ if __name__ == '__main__':
     time = time.iloc[0:, 0].values
     sumAll = np.sum(data.iloc[:, :], axis=1)
     dataNorm = data.iloc[:, :].div(sumAll, axis=0).values
-    
+
     fig = plt.figure(figsize=(25, 20))
     plt.stackplot(time, dataNorm.T)
 
