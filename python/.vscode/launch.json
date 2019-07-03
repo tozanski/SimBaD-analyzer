@@ -10,13 +10,16 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
+            "args" : ["-i", "../test_data/histogram_birthEfficiency.csv",
             //"args" : ["-i", "../test_data/muller_data.csv",
-            //          "-s", "../test_data/stats.csv",
-            //          "-p", "../test_data/muller_data_params.csv",
-            //          "-o", "./testMuller_"
-            "args": ["-i", "../test_data/final_mutation_freq.csv",
-                     "-t", "11",
-                     "-o", "out"
+            //          "-t", "../test_data/stats.csv",
+                      "-t", "../test_data/muller_data.csv",
+                      "-s", "../test_data/stats_for_muller.csv",
+                      "-p", "../test_data/muller_data_params.csv",
+                      "-o", "./testHistMuller_"
+            //"args": ["-i", "../test_data/final_mutation_freq.csv",
+            //         "-t", "11",
+            //         "-o", "out"
             ]
         }
     ]
