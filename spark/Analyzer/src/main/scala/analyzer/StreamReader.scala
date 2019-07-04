@@ -67,12 +67,12 @@ object StreamReader {
       as(Encoders.product[StreamLine])
   }
 
-  def readEventStreamLinesParquet(spark: SparkSession, pathPrefix: String): Dataset[StreamLine] = {
+  def readEventStreamLinesParquet(spark: SparkSession, streamPath: String): Dataset[StreamLine] = {
     spark.
       read.
       format("parquet").
       schema(streamSchema).
-      load(pathPrefix+"/stream.parquet").
+      load(streamPath).
       as(Encoders.product[StreamLine])
   }
 
@@ -137,7 +137,7 @@ object StreamReader {
 
   def main(args: Array[String]) {
 
-    if( args.length != 1 )
+    if( args.length < 2 )
       throw new RuntimeException("no prefix path given")
 
     //args.foreach( println )

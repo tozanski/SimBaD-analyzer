@@ -108,9 +108,9 @@ object Chronicler {
     chronicles
   }
 
-  def computeChronicles(spark: SparkSession, pathPrefix: String): Dataset[ChronicleEntry] = {
+  def computeChronicles(spark: SparkSession, streamPath: String): Dataset[ChronicleEntry] = {
 
-    val stream = StreamReader.readEventStreamLinesParquet(spark, pathPrefix)
+    val stream = StreamReader.readEventStreamLinesParquet(spark, streamPath)
     val events = StreamReader.toEvents(stream)
     val groupedEvents = groupEvents(events)
     val linearChronicles = computeLinearChronicles(startingSnapshot(spark), groupedEvents).
@@ -135,21 +135,21 @@ object Chronicler {
 
   }
 
-  def computeOrReadChronicles(spark: SparkSession, pathPrefix: String): Dataset[ChronicleEntry] =
+  def computeOrReadChronicles(spark: SparkSession, streamPath: String, outputPathPrefix: String): Dataset[ChronicleEntry] =
   {
     import spark.implicits._
     //var chronicles: Dataset[ChronicleEntry] = null
     try{
-      spark.read.parquet(pathPrefix+"/chronicles.parquet").as[ChronicleEntry]
+      spark.read.parquet(outputPathPrefix+"/chronicles.parquet").as[ChronicleEntry]
     }catch {
       case _: AnalysisException =>
         spark.sparkContext.setJobGroup("chronicles", "save chronicles")
-        computeChronicles(spark, pathPrefix).
+        computeChronicles(spark, streamPath).
           //repartition(col("particleId")).
           write.
           mode(SaveMode.Overwrite).
-          parquet(pathPrefix+"/chronicles.parquet")
-        spark.table(pathPrefix + "/chronicles.parquet").as[ChronicleEntry]
+          parquet(outputPathPrefix+"/chronicles.parquet")
+        spark.read.parquet(outputPathPrefix + "/chronicles.parquet").as[ChronicleEntry]
     }
   }
 
@@ -166,8 +166,8 @@ object Chronicler {
 
     spark.sparkContext.setCheckpointDir(pathPrefix + "/checkpoints/")
 
-    computeOrReadChronicles(spark, pathPrefix)
-    //writeLinearChronicles(spark, pathPrefix)
-    scala.io.StdIn.readLine()
+    //computeOrReadChronicles(spark, pathPrefix)
+    writeLinearChronicles(spark, pathPrefix)
+    //scala.io.StdIn.readLine()
   }
 }

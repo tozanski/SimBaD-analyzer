@@ -1,12 +1,16 @@
 package analyzer
 
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.{DataFrame, Dataset, Encoders, SparkSession}
+import org.apache.spark.sql.types.IntegerType
+import org.apache.spark.sql.{AnalysisException, DataFrame, Dataset, Encoders, SaveMode, SparkSession}
 
 object Snapshots{
   def snapshotsUdf(maxTime: Double) = udf(
       (t1:Double, t2:Double) => (0d to maxTime by 1).filter( t => t1 <= t && t < t2 )
     )
+  def snapshotsUdf(timePoints: Seq[Double]) = udf(
+    (t1: Double, t2:Double) => timePoints.filter(t => t1<=t && t<t2)
+  )
 
   def getSnapshots( chronicles: Dataset[ChronicleEntry], maxTime: Double ): DataFrame = {
     chronicles.withColumn("timePoint", explode(snapshotsUdf(maxTime)(col("birthTime"), col("deathTime"))))
@@ -20,6 +24,69 @@ object Snapshots{
         col("mutationId").as(Encoders.LONG),
         col("mutation").as(Encoders.product[Mutation])).
       as(Encoders.product[Cell])
+  }
+
+
+  def getCloneSnapshot(cells: Dataset[Cell]): Dataset[Clone] = {
+    cells.
+      groupBy("mutationId").
+      agg(
+        count(lit(1)).as("count"),
+        first(col("mutation")).as("mutation")
+      ).
+      as(Encoders.product[Clone])
+  }
+
+  def getCloneSnapshots(chronicles: Dataset[ChronicleEntry], maxTime: Double): DataFrame = {
+    chronicles.
+      repartition(col("mutationId")).
+      withColumn("timePoint",
+        explode(
+          sequence(
+            greatest(lit(0), col("birthTime")).cast(IntegerType),
+            least(lit(maxTime), col("deathTime")).cast(IntegerType)
+          )
+        )
+      ).
+      groupBy("mutationId","timePoint").
+      agg(
+        count(lit(1)).as("count"),
+        first(col("mutation")).as("mutation")
+      )
+  }
+
+  def getCloneSnapshots(chronicles: Dataset[ChronicleEntry], timePoints: Seq[Double]) : DataFrame = {
+    chronicles.
+      repartition(col("mutationId")).
+      withColumn("timePoint",
+      explode(
+        snapshotsUdf(timePoints)(col("birthTime"), col("deathTime")))
+      ).groupBy("mutationId", "timePoint").
+      agg(
+        count(lit(1)).alias("count"),
+        first(col("mutation")).alias("mutation")
+      )
+  }
+
+  def computeOrReadCloneSnapshots(pathPrefix: String,
+                                  chronicles: Dataset[ChronicleEntry],
+                                  timePoints: Seq[Double],
+                                  partitionByTime: Boolean = false): Dataset[CloneSnapshot] ={
+    val spark = chronicles.sparkSession
+    val path = pathPrefix + "/clone_snapshots.parquet"
+    try{
+      spark.read.parquet(path).as(Encoders.product[CloneSnapshot])
+    } catch {
+      case _: AnalysisException =>
+        spark.sparkContext.setJobGroup("clone snapshots","save clone snapshots")
+        getCloneSnapshots(chronicles, timePoints).
+          write.
+          partitionBy("timePoint").
+          mode(SaveMode.Overwrite).
+          parquet(path)
+
+        spark.read.parquet(path).as(Encoders.product[CloneSnapshot])
+    }
   }
 
   def getSnapshotList(chronicles: Dataset[ChronicleEntry], timePoints: Iterable[Double]): Vector[Dataset[ChronicleEntry]] = {
@@ -42,9 +109,17 @@ object Snapshots{
         )
   }
 
-  def getFinal( chronicleEntries: Dataset[ChronicleEntry]): DataFrame = {
-    // final
-    chronicleEntries.filter( col("deathTime") === Double.PositiveInfinity ).
+  def finalCloneSnapshot(chronicles: Dataset[ChronicleEntry]): Dataset[Clone] = chronicles.
+    filter(col("deathTime")===Double.PositiveInfinity).
+    groupBy("mutationId").
+    agg(
+      count(lit(1)).as("count"),
+      first(col("mutation")).as("mutation")
+    ).
+    as(Encoders.product[Clone])
+
+  def getFinalCells(chronicleEntries: Dataset[ChronicleEntry]): DataFrame = chronicleEntries.
+    filter( col("deathTime") === Double.PositiveInfinity ).
       select(
         "position.x", "position.y", "position.z",
         "mutationId",
@@ -52,7 +127,8 @@ object Snapshots{
         "mutation.lifespanEfficiency", "mutation.lifespanResistance",
         "mutation.successEfficiency", "mutation.successResistance"
       )
-  }
+
+
 /*
   def getFinalSimpleMutationHistogram( finalConfiguration: DataFrame ): DataFrame = {
     finalConfiguration.groupBy("mutationId").count().orderBy("mutationId")
