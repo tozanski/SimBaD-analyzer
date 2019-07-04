@@ -22,7 +22,7 @@ object Snapshots{
       select(
         col("position").as(Encoders.product[Position]),
         col("mutationId").as(Encoders.LONG),
-        col("mutation").as(Encoders.product[Mutation])).
+        col("cellParams").as(Encoders.product[CellParams])).
       as(Encoders.product[Cell])
   }
 
@@ -32,7 +32,7 @@ object Snapshots{
       groupBy("mutationId").
       agg(
         count(lit(1)).as("count"),
-        first(col("mutation")).as("mutation")
+        first(col("cellParams")).as("cellParams")
       ).
       as(Encoders.product[Clone])
   }
@@ -51,7 +51,7 @@ object Snapshots{
       groupBy("mutationId","timePoint").
       agg(
         count(lit(1)).as("count"),
-        first(col("mutation")).as("mutation")
+        first(col("cellParams")).as("cellParams")
       )
   }
 
@@ -64,7 +64,7 @@ object Snapshots{
       ).groupBy("mutationId", "timePoint").
       agg(
         count(lit(1)).alias("count"),
-        first(col("mutation")).alias("mutation")
+        first(col("cellParams")).alias("cellParams")
       )
   }
 
@@ -75,6 +75,7 @@ object Snapshots{
     val spark = chronicles.sparkSession
     val path = pathPrefix + "/clone_snapshots.parquet"
     try{
+      spark.sparkContext.setJobGroup("read clone snapshots","read clone snapshots")
       spark.read.parquet(path).as(Encoders.product[CloneSnapshot])
     } catch {
       case _: AnalysisException =>
@@ -100,12 +101,12 @@ object Snapshots{
         groupBy("timePoint","mutationId").
         agg(
           count(lit(1)),
-          first("mutation.birthEfficiency").alias("birth_efficiency"),
-          first("mutation.birthResistance").alias("birth_resistance"),
-          first("mutation.lifespanEfficiency").alias("lifespan_efficiency"),
-          first("mutation.lifespanResistance").alias("lifespan_resistance"),
-          first("mutation.successEfficiency").alias("success_efficiency"),
-          first("mutation.successResistance").alias("success_resistance")
+          first("cellParams.birthEfficiency").alias("birth_efficiency"),
+          first("cellParams.birthResistance").alias("birth_resistance"),
+          first("cellParams.lifespanEfficiency").alias("lifespan_efficiency"),
+          first("cellParams.lifespanResistance").alias("lifespan_resistance"),
+          first("cellParams.successEfficiency").alias("success_efficiency"),
+          first("cellParams.successResistance").alias("success_resistance")
         )
   }
 
@@ -114,7 +115,7 @@ object Snapshots{
     groupBy("mutationId").
     agg(
       count(lit(1)).as("count"),
-      first(col("mutation")).as("mutation")
+      first(col("cellParams")).as("cellParams")
     ).
     as(Encoders.product[Clone])
 
@@ -123,15 +124,15 @@ object Snapshots{
       select(
         "position.x", "position.y", "position.z",
         "mutationId",
-        "mutation.birthEfficiency", "mutation.birthResistance",
-        "mutation.lifespanEfficiency", "mutation.lifespanResistance",
-        "mutation.successEfficiency", "mutation.successResistance"
+        "cellParams.birthEfficiency", "cellParams.birthResistance",
+        "cellParams.lifespanEfficiency", "cellParams.lifespanResistance",
+        "cellParams.successEfficiency", "cellParams.successResistance"
       )
 
 
 /*
   def getFinalSimpleMutationHistogram( finalConfiguration: DataFrame ): DataFrame = {
-    finalConfiguration.groupBy("mutationId").count().orderBy("mutationId")
+    finalConfiguration.groupBy("mutationId").count().orderBy("cellParamsId")
   }*/
 
   def writeSnapshots( chronicles: Dataset[ChronicleEntry], pathPrefix: String, maxTime: Double ) = {

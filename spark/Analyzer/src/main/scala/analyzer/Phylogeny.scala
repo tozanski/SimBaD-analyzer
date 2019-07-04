@@ -1,32 +1,39 @@
 package analyzer
 
-import org.apache.spark.sql.functions.{col, explode, first, sum}
+import org.apache.spark.sql.functions.{col, explode, first, isnull, lit, greatest, struct, sum}
 import org.apache.spark.sql.{Dataset, Encoders, SaveMode, SparkSession}
 import org.apache.spark.storage.StorageLevel
 
 object Phylogeny  {
-  def mutationTree(chronicles: Dataset[ChronicleEntry]): Dataset[MutationTreeLink] = {
+  def mutationBranches(chronicles: Dataset[ChronicleEntry]): Dataset[Mutation] = {
 
     val children = chronicles.
       select(
-        col("parentId").as(Encoders.LONG),
-        col("mutationId").as(Encoders.LONG)).
-      alias("children")
+        col("birthTime").alias("time").as(Encoders.scalaDouble),
+        col("parentId").as(Encoders.scalaLong),
+        col("mutationId").as(Encoders.scalaLong),
+        col("cellParams").as(Encoders.product[CellParams])
+      )
 
     val parents = chronicles.
       select(
-        col("particleId").as(Encoders.LONG),
-        col("mutationId").as(Encoders.LONG)).
-      alias("parents")
+        col("particleId").alias("parentId").as(Encoders.scalaLong),
+        col("mutationId").alias("parentMutationid").as(Encoders.scalaLong)
+      )
 
     children.
-      joinWith(parents, col("children.parentId")===col("parents.particleId"), "left_outer").
-      filter(col("_1.mutationId") =!= col("_2.mutationId")).
+      join(parents, Seq("parentId"), "left").
+      na.fill(0).
+      filter(col("mutationId") =!= col("parentMutationId")).
+      repartitionByRange(col("mutationId")).
+      dropDuplicates("mutationId").
       select(
-        col("_1.mutationId").as("mutationId").as(Encoders.LONG),
-        col("_2.mutationId").as("parentMutationId").as(Encoders.LONG)
+        col("mutationId").as(Encoders.scalaLong),
+        col("cellParams").as(Encoders.product[CellParams]),
+        col("parentMutationId").as(Encoders.scalaLong),
+        col("time").as(Encoders.scalaDouble)
       ).
-      as(Encoders.product[MutationTreeLink])
+      as(Encoders.product[Mutation])
   }
 
   def writeLineage(spark: SparkSession,
@@ -48,9 +55,6 @@ object Phylogeny  {
     var selectedBuffer1 = "selected_buf_1"
     var selectedBuffer2 = "selected_buf_2"
 
-    //var selectedTmpPath: String = pathPrefix + "/selected1.parquet"
-    //var selectedTmpPathOther: String = pathPrefix + "/selected2.parquet"
-
     spark.sparkContext.setJobGroup("init selected", "first selected node")
     Seq((root, Array[Long](root))).
       toDF("mutationId", "ancestors").
@@ -59,7 +63,6 @@ object Phylogeny  {
       mode("overwrite").
       saveAsTable(selectedBuffer1)
 
-    //val all_mutations: Dataset[MutationTreeLink] =
     mutations.
       write.
       bucketBy(100, "parentMutationId").
@@ -91,8 +94,6 @@ object Phylogeny  {
       spark.sparkContext.setJobGroup("append selected", "append lineage data")
       selected.
         write.
-        //sortBy("mutationId").
-        //bucketBy(1024, "mutationId").
         mode(SaveMode.Append).
         parquet(lineagesPath)
 
@@ -118,7 +119,7 @@ object Phylogeny  {
       as[Ancestry]
   }
 
-  def mutationCounts(lineages: Dataset[Ancestry], clones: Dataset[Clone]): Dataset[MutationCount] = {
+  def mutationCounts(lineages: Dataset[Ancestry], clones: Dataset[Clone], mutations: Dataset[Mutation]): Dataset[MutationSummary] = {
     val accumulatedCounts = clones.
       join(lineages, Seq("mutationId"), "right" ).
       na.fill(0).
@@ -129,28 +130,60 @@ object Phylogeny  {
       ).
       withColumnRenamed("ancestorId", "mutationId")
 
+    val parentMutations = mutations.
+      select(
+        col("mutationId").alias("parentMutationId"),
+        col("cellParams").alias("parentParams"),
+        col("time").alias("parentTime")
+      ).alias("parent_mutations")
+
+    val mutationParams = mutations.
+      join(parentMutations, Seq("parentMutationId"), "left").
+      na.fill(0).
+      select(
+        col("mutationId"),
+        col("cellParams"),
+        col("time"),
+        (col("time") - greatest(lit(0),col("parentTIme"))).alias("waitingTime"),
+        struct(
+          (col("cellParams.birthEfficiency")-col("parentParams.birthEfficiency")).alias("birthEfficiency"),
+          (col("cellParams.birthResistance")-col("parentParams.birthResistance")).alias("birthResistance"),
+          (col("cellParams.lifespanEfficiency")-col("parentParams.lifespanEfficiency")).alias("lifespanEfficiency"),
+          (col("cellParams.lifespanResistance")-col("parentParams.lifespanResistance")).alias("lifespanResistance"),
+          (col("cellParams.successEfficiency")-col("parentParams.successEfficiency")).alias("successEfficiency"),
+          (col("cellParams.successResistance")-col("parentParams.successResistance")).alias("successResistance")
+        ).alias("parameterUpgrades")
+      )
+
     clones.
-      withColumnRenamed("count", "typeCount").
+      select(col("mutationId"), col("count").alias("typeCount")).
       join(accumulatedCounts, Seq("mutationId"), "right").
+      na.fill(0).
       join(lineages, Seq("mutationId")).
-      as(Encoders.product[MutationCount])
+      join(
+        mutationParams,
+        Seq("mutationId")
+      ).
+      as(Encoders.product[MutationSummary])
   }
 
-  def getOrComputeMutationTree(spark: SparkSession, pathPrefix: String, chronicles: Dataset[ChronicleEntry]): Dataset[MutationTreeLink] = {
+  def getOrComputeMutationBranches(pathPrefix: String, chronicles: Dataset[ChronicleEntry]): Dataset[Mutation] = {
+    val spark = chronicles.sparkSession
     import spark.implicits._
 
     val mutationPath = pathPrefix + "/mutation_tree.parquet"
     try{
-      spark.read.parquet(mutationPath).as[MutationTreeLink]
+      spark.read.parquet(mutationPath).as[Mutation]
     }catch {
       case _: Exception =>
         spark.sparkContext.setJobGroup("mutation tree", "save mutation tree")
-        mutationTree(chronicles).write.mode("overwrite").parquet(mutationPath)
-        spark.read.parquet(mutationPath).as[MutationTreeLink]
+        mutationBranches(chronicles).write.mode("overwrite").parquet(mutationPath)
+        spark.read.parquet(mutationPath).as[Mutation]
     }
   }
 
-  def getOrComputeLineages(spark: SparkSession, pathPrefix: String, mutationTree: Dataset[MutationTreeLink]): Dataset[Ancestry] = {
+  def getOrComputeLineages(pathPrefix: String, mutationTree: Dataset[MutationTreeLink]): Dataset[Ancestry] = {
+    val spark = mutationTree.sparkSession
     import spark.implicits._
 
     val lineagesPath = pathPrefix + "/lineages.parquet"
@@ -164,33 +197,4 @@ object Phylogeny  {
         spark.read.parquet(lineagesPath).as[Ancestry]
       }
     }
-
-/*
-  def main(args: Array[String]) = {
-    if( args.length != 1 )
-      throw new RuntimeException("no prefix path given")
-
-    val pathPrefix = args(0)
-
-    val spark = SparkSession.builder.
-      appName("Phylogeny Testing").
-      getOrCreate()
-    spark.sparkContext.setCheckpointDir(pathPrefix + "/tmp")
-
-    val chronicles = Chronicler.computeOrReadChronicles(spark, pathPrefix)
-
-    val maxTime = Analyzer.getMaxTime(chronicles)
-
-    val mutationTree = Phylogeny.getOrComputeMutationTree(spark, pathPrefix, chronicles)
-
-    val lineages = writeLineage(spark, pathPrefix, mutationTree)//getOrComputeLineages(spark, pathPrefix, mutationTree)
-
-   /* spark.sparkContext.setJobGroup("muller","compute & save muller plot data")
-    Analyzer.
-      saveCSV(pathPrefix + "/muller_plot_data",
-      Muller.mullerData(spark, chronicles, lineages, maxTime, 1000).toDF,
-      true)
-
-    */
-  }*/
 }

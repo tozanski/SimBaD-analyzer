@@ -19,7 +19,7 @@ object Chronicler {
   val LIT_TRANSFORMED: Column = struct(lit(4).as("encoded"))
 
   val startingMutationId: Long = 1
-  val startingMutation = Mutation(0.1f, 0.5f, 0.1f, 0.5f, 0.9f, 0.5f)
+  val startingMutation = CellParams(0.1f, 0.5f, 0.1f, 0.5f, 0.9f, 0.5f)
   val posRange: NumericRange[Float] = -2.0f to 2.0f by 1.0f
 
 
@@ -102,7 +102,7 @@ object Chronicler {
         col("deathTime").as(Encoders.DOUBLE),
         col("position").as(Encoders.product[Position]),
         col("mutationId").as(Encoders.LONG),
-        col("mutation").as(Encoders.product[Mutation])
+        col("cellParams").as(Encoders.product[CellParams])
       ).as(Encoders.product[ChronicleEntry])
 
     chronicles
@@ -120,9 +120,9 @@ object Chronicler {
     return chronicles
   }
 
-  def writeLinearChronicles(spark: SparkSession, pathPrefix: String) = {
+  def writeLinearChronicles(spark: SparkSession, streamPath: String, outputPrefix: String) = {
 
-    val stream = StreamReader.readEventStreamLinesParquet(spark, pathPrefix)
+    val stream = StreamReader.readEventStreamLinesParquet(spark, streamPath)
     val events = StreamReader.toEvents(stream)
 
     val groupedEvents = groupEvents(events)
@@ -158,16 +158,17 @@ object Chronicler {
     if (args.length != 1)
       throw new RuntimeException("no prefix path given")
 
-    val pathPrefix = args(0)
+    val streamPath = args(0)
+    val outputPrefix = args(1)
 
     val spark = SparkSession.builder.
       appName("SimBaD analyzer").
       getOrCreate()
 
-    spark.sparkContext.setCheckpointDir(pathPrefix + "/checkpoints/")
+    spark.sparkContext.setCheckpointDir(outputPrefix + "/checkpoints/")
 
     //computeOrReadChronicles(spark, pathPrefix)
-    writeLinearChronicles(spark, pathPrefix)
+    writeLinearChronicles(spark, streamPath, outputPrefix)
     //scala.io.StdIn.readLine()
   }
 }

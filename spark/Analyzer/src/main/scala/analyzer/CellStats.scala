@@ -65,19 +65,19 @@ object CellStats {
       first("systemSize").alias("systemSize"),
       sum(col("probability") * -log2("probability") ).alias("entropy"),
 
-      weightedAvg(col("mutation.birthEfficiency"), col("count")).alias("mean_birth_efficiency"),
-      weightedAvg(col("mutation.birthResistance"), col("count")).alias("mean_birth_resistance"),
-      weightedAvg(col("mutation.lifespanEfficiency"), col("count")).alias("mean_lifespan_efficiency"),
-      weightedAvg(col("mutation.lifespanResistance"), col("count")).alias("mean_lifespan_resistance"),
-      weightedAvg(col("mutation.successEfficiency"), col("count")).alias("mean_success_efficiency"),
-      weightedAvg(col("mutation.successResistance"), col("count")).alias("mean_success_resistance"),
+      weightedAvg(col("cellParams.birthEfficiency"), col("count")).alias("mean_birth_efficiency"),
+      weightedAvg(col("cellParams.birthResistance"), col("count")).alias("mean_birth_resistance"),
+      weightedAvg(col("cellParams.lifespanEfficiency"), col("count")).alias("mean_lifespan_efficiency"),
+      weightedAvg(col("cellParams.lifespanResistance"), col("count")).alias("mean_lifespan_resistance"),
+      weightedAvg(col("cellParams.successEfficiency"), col("count")).alias("mean_success_efficiency"),
+      weightedAvg(col("cellParams.successResistance"), col("count")).alias("mean_success_resistance"),
 
-      weightedStdDev(col("mutation.birthEfficiency"), col("count")).alias("stddev_birth_efficiency"),
-      weightedStdDev(col("mutation.birthResistance"), col("count")).alias("stddev_birth_resistance"),
-      weightedStdDev(col("mutation.lifespanEfficiency"), col("count")).alias("stddev_lifespan_efficiency"),
-      weightedStdDev(col("mutation.lifespanResistance"), col("count")).alias("stddev_lifespan_resistance"),
-      weightedStdDev(col("mutation.successEfficiency"), col("count")).alias("stddev_success_efficiency"),
-      weightedStdDev(col("mutation.successResistance"), col("count")).alias("stddev_success_resistance")
+      weightedStdDev(col("cellParams.birthEfficiency"), col("count")).alias("stddev_birth_efficiency"),
+      weightedStdDev(col("cellParams.birthResistance"), col("count")).alias("stddev_birth_resistance"),
+      weightedStdDev(col("cellParams.lifespanEfficiency"), col("count")).alias("stddev_lifespan_efficiency"),
+      weightedStdDev(col("cellParams.lifespanResistance"), col("count")).alias("stddev_lifespan_resistance"),
+      weightedStdDev(col("cellParams.successEfficiency"), col("count")).alias("stddev_success_efficiency"),
+      weightedStdDev(col("cellParams.successResistance"), col("count")).alias("stddev_success_resistance")
     ).alias("scalarStats")
   }
 
@@ -119,7 +119,7 @@ object CellStats {
   def histogramAggregate(): Column = {
     val hist = new expression.HistogramUDAF
     val aggregates = mutationParameterNames.
-      map(x => hist.apply(col("mutation."+ x), col("count")).alias(x))
+      map(x => hist.apply(col("cellParams."+ x), col("count")).alias(x))
     struct(aggregates:_*).alias("histograms")
   }
 

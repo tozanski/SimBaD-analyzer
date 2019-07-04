@@ -35,7 +35,7 @@ object Muller{
       map( x => (x.mutationId, x.ancestors.toIterable) ).
       sortBy( _._2 ).
       //map( x => (x._1, x._2.toArray) ).
-      //toDF("mutationId","ancestors").
+      //toDF("cellParamsId","ancestors").
       map( _._1).
       toDF("mutationId").
       withColumn("ordering", monotonically_increasing_id).
@@ -108,7 +108,7 @@ object Muller{
   def collect(clones: Dataset[Clone], mutationOrder: Dataset[MutationOrder]): Array[Long] = {
     import clones.sparkSession.implicits._
 
-    val defaultClone = ((null, 0, null, null)::Nil).toDF("mutationId", "count", "mutation", "ordering")
+    val defaultClone = ((null, 0, null, null)::Nil).toDF("mutationId", "count", "cellParams", "ordering")
 
     clones.sparkSession.sparkContext.setJobGroup("muller snapshot", "muller plot data snapshot")
     clones.
@@ -116,7 +116,6 @@ object Muller{
       unionByName(defaultClone).
       groupBy("ordering").
       agg(
-        //first(col("mutationId")).as("mutationId"),
         sum(coalesce(col("count"), lit(0))).as("count")
       ).
       orderBy("ordering").
@@ -125,16 +124,4 @@ object Muller{
       collect()
   }
 
-
-/*
-  def mullerPlotSnapshot(snapshot: Dataset[Cell], mutationOrder: Dataset[(Long, Long)]): Dataset[(Long, Long)] = {
-    snapshot.
-      groupBy("mutationId").
-      agg(count(lit(1)).alias("count")).
-      join(mutationOrder, Seq("mutationId"), "left").
-      withColumn("cumeDist",
-        cume_dist over Window.orderBy("ordering")).
-      as(Encoders.product[(Long,Long)])
-  }
- */
 }

@@ -30,27 +30,27 @@ object StreamReader {
   ))
 
   case class StreamLine(
-                         position_0: Float,
-                         position_1: Float,
-                         position_2: Float,
-                         density: Float,
-                         next_event_time: Double,
-                         next_event_kind: Int,
-                         birth_efficiency: Float,
-                         birth_resistance: Float,
-                         lifespan_efficiency: Float,
-                         lifespan_resistance: Float,
-                         success_efficiency: Float,
-                         success_resistance: Float,
-                         mutation_id: Long,
-                         birth_rate: Float,
-                         death_rate: Float,
-                         success_probability: Float,
-                         lifespan: Float,
-                         event_time: Double,
-                         event_time_delta: Int,
-                         event_kind: Int
-                       )
+    position_0: Float,
+    position_1: Float,
+    position_2: Float,
+    density: Float,
+    next_event_time: Double,
+    next_event_kind: Int,
+    birth_efficiency: Float,
+    birth_resistance: Float,
+    lifespan_efficiency: Float,
+    lifespan_resistance: Float,
+    success_efficiency: Float,
+    success_resistance: Float,
+    mutation_id: Long,
+    birth_rate: Float,
+    death_rate: Float,
+    success_probability: Float,
+    lifespan: Float,
+    event_time: Double,
+    event_time_delta: Int,
+    event_kind: Int
+  )
 
 
   def readEventStreamLines(spark: SparkSession, path: String): Dataset[StreamLine] = {
@@ -97,7 +97,7 @@ object StreamReader {
           col("lifespan_resistance").as(Encoders.FLOAT).alias("lifespanResistance"),
           col("success_efficiency").as(Encoders.FLOAT).alias("successEfficiency"),
           col("success_resistance").as(Encoders.FLOAT).alias("successResistance")
-        ).as("mutation").as(Encoders.product[Mutation])
+        ).as("cellParams").as(Encoders.product[CellParams])
       ).as(Encoders.product[Event])
     )
   }
@@ -112,7 +112,6 @@ object StreamReader {
       withColumn("timeOrder", monotonically_increasing_id()).
       as(Encoders.product[EnumeratedEvent])
   }
-
 
   def createOrReadEnumeratedEvents(spark: SparkSession, pathPrefix: String): Dataset[EnumeratedEvent] = {
     import spark.implicits._
@@ -134,38 +133,22 @@ object StreamReader {
     events
   }
 
-
   def main(args: Array[String]) {
 
-    if( args.length < 2 )
-      throw new RuntimeException("no prefix path given")
+    if( args.length != 2 )
+      throw new RuntimeException("no input or output path given")
 
-    //args.foreach( println )
-    val pathPrefix = args(0)
+    val streamPath = args(0)
+    val streamOutput = args(1)
 
     val spark = SparkSession.builder.
       appName("SimBaD stream converter").
       getOrCreate()
 
 
-    readEventStreamLines(spark, pathPrefix + "/stream.csv.gz").
+    readEventStreamLines(spark, streamPath).
       write.
       mode(SaveMode.Overwrite).
-      parquet(pathPrefix+"/stream.parquet")
-
-
-    //createOrReadEnumeratedEvents(spark, pathPrefix)
-/*
-    readEventStreamLines(spark, pathPrefix + "/stream.csv.gz").
-      repartitionByRange(col("event_time")).
-      withColumn("partitionId", partition_id()).
-      write.
-      mode(SaveMode.Overwrite).
-      format("csv").
-      option("delimiter", ";").
-      option("header", true).
-      save(pathPrefix+"/partitioned_events.csv")*/
-
-    //scala.io.StdIn.readLine()
+      parquet(streamOutput)
   }
 }

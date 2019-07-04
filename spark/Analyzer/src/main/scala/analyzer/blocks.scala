@@ -8,7 +8,7 @@ case class Position(
   z: Float
 )
 
-case class Mutation(
+case class CellParams(
   birthEfficiency: Float,
   birthResistance: Float,
   lifespanEfficiency: Float,
@@ -20,7 +20,7 @@ case class Mutation(
 case class Cell(
   position: Position,
   mutationId: Long,
-  mutation: Mutation
+  cellParams: CellParams
 )
 
 case class EventKind(encoded: Int){
@@ -38,7 +38,7 @@ case class EventKind(encoded: Int){
     })
   }
 
-  override def toString(): String = { 
+  override def toString(): String = {
     (encoded: @switch) match {
       case 0 => "NONE"
       case 1 => "CREATED"
@@ -59,7 +59,7 @@ case class Event(
   eventKind: EventKind,
   position: Position,
   mutationId: Long,
-  mutation: Mutation
+  cellParams: CellParams
 )
 
 case class EnumeratedEvent(
@@ -69,7 +69,7 @@ case class EnumeratedEvent(
   eventKind: EventKind,
   position: Position,
   mutationId: Long,
-  mutation: Mutation
+  cellParams: CellParams
 )
 
 case class GroupedEvent(
@@ -78,7 +78,7 @@ case class GroupedEvent(
   eventId: Long,
   eventKind: EventKind,
   position: Position,
-  mutation: Mutation
+  cellParams: CellParams
 )
 
 case class ChronicleEntry(
@@ -88,18 +88,29 @@ case class ChronicleEntry(
   deathTime: Double,
   position: Position,
   mutationId: Long,
-  mutation: Mutation
+  cellParams: CellParams
 ){
   def toCell = Cell(
     position,
     mutationId,
-    mutation
+    cellParams
   )
 }
 
-case class Clone(mutationId: Long, count: Long, mutation: Mutation)
-case class CloneSnapshot(timePoint: Double, mutationId: Long, mutation: Mutation)
+case class Clone(mutationId: Long, count: Long, cellParams: CellParams)
+case class CloneSnapshot(timePoint: Double, mutationId: Long, cellParams: CellParams)
+case class Mutation(mutationId: Long, cellParams: CellParams, parentMutationId: Long, time: Double)
 case class MutationTreeLink(mutationId: Long, parentMutationId: Long)
 case class Ancestry(mutationId: Long, ancestors: Array[Long])
 case class MutationOrder(mutationId: Long, ordering: Long)
-case class MutationCount(mutationId: Long, mutation: Mutation, typeCount: Long, mutationCount: Long, ancestors: Array[Long])
+
+case class MutationSummary(
+  mutationId: Long,
+  cellParams: CellParams,
+  typeCount: Long,
+  mutationCount: Long,
+  ancestors: Array[Long],
+  time: Double,
+  waitingTime: Double,
+  parameterUpgrades: CellParams
+)
