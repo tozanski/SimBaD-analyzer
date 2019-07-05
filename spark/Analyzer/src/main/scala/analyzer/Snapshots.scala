@@ -81,8 +81,9 @@ object Snapshots{
       case _: AnalysisException =>
         spark.sparkContext.setJobGroup("clone snapshots","save clone snapshots")
         getCloneSnapshots(chronicles, timePoints).
+          repartition(col("mutationId")).
           write.
-          partitionBy("timePoint").
+          //partitionBy("timePoint").
           mode(SaveMode.Overwrite).
           parquet(path)
 
