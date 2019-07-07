@@ -1,21 +1,30 @@
 #!/bin/bash
 set -Eeuxo pipefail
 
-if [ $# -ne 2 ];
-  then echo "usage chroncicles.sh [stream_path] [initial_path]" >&2
+if [ $# -ne 3 ];
+  then 
+    echo "usage chroncicles.sh [stream_path] [initial_path] [output_path]" >&2
   exit 1
 fi
 
 STREAM_PATH=$1
 INITIAL_PATH=$2
 
-OUTPUT_PATH=chronciles.csv
+OUTPUT_PATH=$3
 
 SETTLERS_FIFO=`mktemp -u`
 OFFSPRINGS_FIFO=`mktemp -u`
 RESOLVED_SETTLERS_FIFO=`mktemp -u`
+CHRONICLES_FIFO=`mktemp -u`
 
-mkfifo -m 600 "$SETTLERS_FIFO" "$OFFSPRINGS_FIFO" "$RESOLVED_SETTLERS_FIFO"
+MEM_SORT_POSITION=2G
+MEM_SORT_SETTLERS=1G
+MEM_SORT_OFFSPRINGS=1G
+
+COMPRESSION_SORT="gzip"
+COMPRESSION_OUTPUT="gzip"
+
+mkfifo -m 600 "$SETTLERS_FIFO" "$OFFSPRINGS_FIFO" "$RESOLVED_SETTLERS_FIFO" "$CHRONICLES_FIFO"
 
 gzcat "$STREAM_PATH" |    # decompress the stream
   tail -n +2 |            # drop header line
@@ -33,10 +42,10 @@ BEGIN{
     eid++
     
   print $1 ";" $2 ";" $3 ";" eid ";" $18 ";" $19 ";" $20  ";" $13 ";" $7 ";" $8 ";" $9 ";" $10 ";" $11 ";" $12 
-}' |                                      # enumerate events and extract the fields needed to chronicles
-  tail -n +2 |                            # drop headers from cleaned stream
-  cat "$INITIAL_PATH" - |                 # include initial configuration
-  sort  -k1,3 -t ";" --stable |     # sort by position, effectively partitioning the data by position
+}' |                                                                                                # enumerate events and extract the fields needed to chronicles
+  tail -n +2 |                                                                                      # drop headers from cleaned stream
+  cat "$INITIAL_PATH" - |                                                                           # include initial configuration
+  sort  -k1,3 -t ";" --stable -S "$MEM_SORT_POSITION" --compress-program "$COMPRESSION_SORT" |      # sort by position, effectively partitioning the data by position
   awk -F ";" -v OFFSPRINGS_FILE="$OFFSPRINGS_FIFO" -v SETTLERS_FILE="$SETTLERS_FIFO" '
 function print_entry(parent_id, death_time){
   if (parent_id)  # parent != 0 is offspring
@@ -117,9 +126,13 @@ END{
 }
 ' &
 
+# join settler with its parent; before joining offspring will be printed to output before sorting to avoid race with later print of settlers 
 join -t ";" -a 1 -o'0,1.2,2.3,1.4,1.5,1.6,1.7,1.8,1.9,1.10,1.11,1.12,1.13,1.14,1.15,1.16'  \
-  <(tail -n +2 "$SETTLERS_FIFO" | sort -k1,1 -t ";") \
-  <(tee "$OUTPUT_PATH" < "$OFFSPRINGS_FIFO" | tail -n +2 "$OFFSPRINGS_FIFO" | sort -k1,1 -t ";") \
-  >> "$OUTPUT_PATH"
+  <(tail -n +2 "$SETTLERS_FIFO" | sort -k1,1 -t ";" -S "$MEM_SORT_SETTLERS" --compress-program "$COMPRESSION_SORT" ) \
+  <(tee "$CHRONICLES_FIFO" < "$OFFSPRINGS_FIFO" | tail -n +2 "$OFFSPRINGS_FIFO" | sort -k1,1 -t ";"  -S "$MEM_SORT_OFFSPRINGS" --compress-program="$COMPRESSION_SORT") \
+  >> "$CHRONICLES_FIFO" &
 
-rm "$SETTLERS_FIFO" "$OFFSPRINGS_FIFO" "$RESOLVED_SETTLERS_FIFO"
+# compress output
+"$COMPRESSION_OUTPUT" < "$CHRONICLES_FIFO" > "$OUTPUT_PATH"
+
+rm "$SETTLERS_FIFO" "$OFFSPRINGS_FIFO" "$RESOLVED_SETTLERS_FIFO" "$CHRONICLES_FIFO"
