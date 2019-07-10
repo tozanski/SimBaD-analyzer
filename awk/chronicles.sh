@@ -26,7 +26,7 @@ COMPRESSION_OUTPUT="gzip"
 
 mkfifo -m 600 "$SETTLERS_FIFO" "$OFFSPRINGS_FIFO" "$RESOLVED_SETTLERS_FIFO" "$CHRONICLES_FIFO"
 
-gzcat "$STREAM_PATH" |    # decompress the stream
+zcat "$STREAM_PATH" |    # decompress the stream
   tail -n +2 |            # drop header line
   awk -F ";" '            
 BEGIN{

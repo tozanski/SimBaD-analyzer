@@ -197,4 +197,21 @@ object Phylogeny  {
         spark.read.parquet(lineagesPath).as[Ancestry]
       }
     }
+
+  def getOrComputeMutationCounts(path: String,
+                                      lineages: Dataset[Ancestry],
+                                      clones: Dataset[Clone],
+                                      mutations: Dataset[Mutation]): Dataset[MutationSummary] ={
+    val spark = clones.sparkSession
+    import spark.implicits._
+
+    try{
+      spark.read.parquet(path).as[MutationSummary]
+    }catch{
+      case _: Exception =>
+        spark.sparkContext.setJobGroup("clone counts", "compute clone counts")
+        mutationCounts(lineages, clones, mutations).write.mode(SaveMode.Overwrite).parquet(path)
+        spark.read.parquet(path).as[MutationSummary]
+    }
+  }
 }

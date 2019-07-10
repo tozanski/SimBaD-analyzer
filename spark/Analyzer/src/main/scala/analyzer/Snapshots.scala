@@ -68,12 +68,12 @@ object Snapshots{
       )
   }
 
-  def computeOrReadCloneSnapshots(pathPrefix: String,
+  def computeOrReadCloneSnapshots(path: String,
                                   chronicles: Dataset[ChronicleEntry],
                                   timePoints: Seq[Double],
                                   partitionByTime: Boolean = false): Dataset[CloneSnapshot] ={
     val spark = chronicles.sparkSession
-    val path = pathPrefix + "/clone_snapshots.parquet"
+
     try{
       spark.sparkContext.setJobGroup("read clone snapshots","read clone snapshots")
       spark.read.parquet(path).as(Encoders.product[CloneSnapshot])

@@ -5,7 +5,7 @@ import java.io.{File, PrintWriter}
 import analyzer.CellStats.ScalarCloneStats
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.expressions.{MutableAggregationBuffer, UserDefinedAggregateFunction}
-import org.apache.spark.sql.{Column, DataFrame, Dataset, Encoders, Row}
+import org.apache.spark.sql.{Column, DataFrame, Dataset, Encoders, Row, SaveMode}
 import org.apache.spark.sql.functions.{avg, broadcast, col, count, explode, first, lit, log2, struct, sum, udf}
 import org.apache.spark.sql.types.{ArrayType, DataType, FloatType, LongType, StructField, StructType}
 
@@ -54,7 +54,7 @@ object CellStats {
       withColumn("ancestorMutationId", explode(col("ancestors"))).
       groupBy("ancestorMutationId").
       agg(
-        sum(col("count"))
+        sum(col("count")).alias("mutationCount")
       ).
       as(Encoders.product[(Long,Long)])
   }
@@ -81,7 +81,8 @@ object CellStats {
     ).alias("scalarStats")
   }
 
-  def collect(cloneSnapshots: Dataset[CloneSnapshot]): Array[CellStats] = {
+  def write(path: String, cloneSnapshots: Dataset[CloneSnapshot]): Array[CellStats] = {
+
 
     cloneSnapshots.sparkSession.sparkContext.setJobGroup("system sizes", "collect system sizes")
     val systemSizes: Map[Double, Long] = cloneSnapshots.
@@ -101,7 +102,7 @@ object CellStats {
     val aggregates = histogramAggregate() :: scalarAggregate() :: Nil
 
     cloneSnapshots.sparkSession.sparkContext.setJobGroup("clone stats", "compute clone stats")
-    val result = cloneSnapshots.
+    cloneSnapshots.
       withColumn("systemSize", mapSystemSizeUDF(col("timePoint"))).
       withColumn("probability",
         col("count")/col("systemSize")
@@ -110,11 +111,27 @@ object CellStats {
       agg(aggregates.head, aggregates.tail:_*).
       as(Encoders.product[CellStats]).
        orderBy("timePoint").
-      collect()
+      write.
+      mode(SaveMode.Overwrite).
+      parquet(path)
 
     systemSizesBc.unpersist()
-    result
+    cloneSnapshots.sparkSession.read.parquet(path).as(Encoders.product[CellStats]).collect()
   }
+
+  def readOrCompute(path: String, cloneSnapshots: Dataset[CloneSnapshot]): Array[CellStats] = {
+    val spark = cloneSnapshots.sparkSession
+    import spark.implicits._
+
+    try{
+      spark.read.parquet(path).as[CellStats].collect()
+    }catch{
+      case _: Exception =>
+        write(path, cloneSnapshots)
+        spark.read.parquet(path).as[CellStats].collect()
+    }
+  }
+
 
   def histogramAggregate(): Column = {
     val hist = new expression.HistogramUDAF

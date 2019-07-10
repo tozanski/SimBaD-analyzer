@@ -2,7 +2,7 @@ package analyzer
 
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.{Dataset, DataFrame, Encoders, SparkSession}
+import org.apache.spark.sql.{Dataset, DataFrame, Encoders, SaveMode, SparkSession}
 
 object Muller{
   def mullerOrder(lineages: Dataset[Ancestry] ): Dataset[MutationOrder] = {
@@ -41,6 +41,60 @@ object Muller{
       withColumn("ordering", monotonically_increasing_id).
       as[MutationOrder]
   }
+
+  def largeMullerOrder(lineages: Dataset[Ancestry], largeClones: Dataset[(Long,CellParams)]): Array[MutationOrder] ={
+    Muller.mullerOrder(
+      lineages.
+        join(broadcast(largeClones.select("mutationId")),"mutationId").
+        as(Encoders.product[Ancestry])
+    ).
+      orderBy("ordering").
+      collect()
+  }
+
+  def readOrComputeLargeMullerOrder(path: String,
+                                    lineages: Dataset[Ancestry],
+                                    largeClones: Dataset[(Long, CellParams)]): Array[MutationOrder] = {
+    val spark = lineages.sparkSession
+    import spark.implicits._
+
+    try{
+      spark.read.parquet(path).as(Encoders.product[MutationOrder]).collect()
+    }catch{
+      case _: Exception =>
+        spark.sparkContext.setJobGroup("large muller order", "large muller order")
+        val result = largeMullerOrder(lineages, largeClones)
+        result.toSeq.toDS().toDF().write.mode(SaveMode.Overwrite).parquet(path)
+        result
+    }
+  }
+
+  def largeClones(chronicles: Dataset[ChronicleEntry]): Dataset[(Long, CellParams)] = {
+    chronicles.
+      groupBy("mutationId").
+      agg(
+        count(lit(1)).alias("mutationSize"),
+        first(col("cellParams")).alias("cellParams")
+      ).
+      filter( col("mutationSize") > 1000 ).
+      select(
+        col("mutationId").as(Encoders.scalaLong),
+        col("cellParams").as(Encoders.product[CellParams])
+      )
+  }
+  def readOrComputeLargeClones(path: String, chronicles: Dataset[ChronicleEntry]): Dataset[(Long, CellParams)] = {
+    val spark = chronicles.sparkSession
+    import spark.implicits._
+    try{
+      spark.read.parquet(path).as[(Long, CellParams)]
+    }catch {
+      case _: Exception =>
+        spark.sparkContext.setJobGroup("large clones", "compute large clones")
+        largeClones(chronicles).write.mode(SaveMode.Overwrite).parquet(path)
+        spark.read.parquet(path).as[(Long, CellParams)]
+    }
+  }
+
 
   def mullerData( spark: SparkSession,
                   chronicles: Dataset[ChronicleEntry],
@@ -99,7 +153,7 @@ object Muller{
       orderBy("timePoint")
 
     spark.sparkContext.setJobGroup("muller plot data", "write muller plot data")
-    Analyzer.saveCSV(path, result, coalesce = true)
+    Analyzer.saveParquet(path, result)
 
     mutationSet.destroy()
 
@@ -123,5 +177,7 @@ object Muller{
       as(Encoders.scalaLong).
       collect()
   }
+
+
 
 }
