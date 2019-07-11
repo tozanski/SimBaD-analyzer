@@ -3,70 +3,28 @@
 
 import pandas as pd
 import numpy as np
-import tqdm
-import csv
 import sys
-import getopt
+import fire
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-from itertools import dropwhile, takewhile
 from matplotlib import colors
-
-
-def get_args(argv):
-    inputFile = ''
-    statsFile = ''
-    paramsFile = ''
-    outputFile = ''
-    timefile = ''
 
     def print_help():
         print('test.py -i <inputFile> -t <timeFile> -s <statsFile> \
               -n <parameterName> -o <outputFile>')
 
-    try:
-        opts, args = getopt.getopt(argv, "hi:t:s:p:n:o:", [
-                        "iFile=", "tFile", "sFile", "pName", "oFile="])
-    except getopt.GetoptError:
-        print_help()
-        sys.exit(2)
-    for opt, arg in opts:
-        if opt == '-h':
-            print_help()
-            sys.exit()
-        elif opt in ("-i", "--iFile"):
-            inputFile = arg
-        elif opt in ("-t", "--tFile"):
-            timeFile = arg
-        elif opt in ("-s", "--sFile"):
-            statsFile = arg
         elif opt in ("-n", "--pName"):
             paramName = arg
-        elif opt in ("-o", "--oFile"):
-            outputFile = arg
-
-    return (inputFile, timeFile, statsFile, paramName, outputFile)
-
-
-def getData(fileName, header=0):
-    df = pd.read_csv(fileName, sep=";", header=header)
-    return df
-
-
 def buildColorsList(data, cmap):
     normalize = colors.Normalize(vmax=data.max(), vmin=data.min())
     colorList = cmap(normalize(data))
     return colorList
 
-
-if __name__ == '__main__':
-
-    inputFile, timeFile, statsFile, paramName, outputFile \
-        = get_args(sys.argv[1:])
-
-    data = getData(inputFile, header=None)
-    time = getData(timeFile)
-    statsData = getData(statsFile)
+def histogram_plots(input_csv, time_parquet, stats_parquet, output_file):
+    
+    data = pd.read_csv(input_csv, sep=";", header=None)
+    time = pd.read_parquet(time_parquet)
+    statsData = pd.read_parquet(stats_parquet)
 
     time = time.iloc[0:, 0].values
     time = np.append([0], time, axis=0)
@@ -75,11 +33,10 @@ if __name__ == '__main__':
 
     # cmap = plt.get_cmap('Blues', data.shape[1])
     # cmap = plt.cm.get_cmap('magma_r', data.shape[1])
-    # cmap = plt.cm.get_cmap('hot', data.shape[1])
+    cmap = plt.cm.get_cmap('nipy_spectral', data.shape[1])
     # cmap = plt.cm.get_cmap('viridis', data.shape[1])
     # https://cran.r-project.org/web/packages/viridis/vignettes/intro-to-viridis.html#gallery
 
-    cmap = plt.cm.get_cmap('RdYlBu', data.shape[1])
 
     # colors = cmap.colors
     # https://matplotlib.org/3.1.0/tutorials/colors/colormap-manipulation.html
@@ -118,11 +75,13 @@ if __name__ == '__main__':
     colorbar = plt.colorbar(sm)
     colorbar.set_label(paramName, size='xx-large')
 
-    outputFienName = outputFile+"_"+paramName+'.png'
-    plt.savefig(outputFienName, dpi=150)
-    # plt.show()
+    outputFileName = output_file
+    plt.savefig(outputFileName, dpi=150)
+    #plt.show()
     plt.cla()
     plt.clf()
     plt.close('all')
 
-print("That's all.")
+if __name__ == '__main__':
+    fire.Fire(histogram_plots)
+    print("That's all.")
