@@ -46,6 +46,8 @@ def get_args(argv):
 
 
 def getData(fileName):
+    # df = pd.read_parquet(fileName, engine='pyarrow')
+    # df = pd.read_parquet(fileName, engine='fastparquet')
     df = pd.read_csv(fileName, sep=";")
     return df
 
@@ -93,8 +95,10 @@ if __name__ == '__main__':
 
         ax2.set_xticks(ax2Ticks)
         ax2.set_xbound(ax1.get_xbound())
+        ticks = ax2Ticks[(np.where(ax2Ticks.astype(int) <
+                         statsData['systemSize'].values.shape[0]))]
         ax2.set_xticklabels(np.take(statsData['systemSize'].values,
-                            ax2Ticks[0:-1].astype(int), axis=0))
+                            ticks.astype(int), axis=0))
         # plt.xlabel('time [sytem]', fontsize='xx-large')
         ax1.set_ylabel(
             'fractions of cell clons', fontsize='xx-large')
