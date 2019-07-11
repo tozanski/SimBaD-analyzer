@@ -5,65 +5,30 @@
 """
 import pandas as pd
 import numpy as np
-import tqdm
-import csv
 import sys
-import getopt
+import fire
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-from itertools import dropwhile, takewhile
 from matplotlib import colors
 
 
-def get_args(argv):
-    inputFile = ''
-    statsFile = ''
-    paramsFile = ''
-    outputFile = ''
-
-    try:
-        opts, args = getopt.getopt(argv, "hi:s:p:o:", [
-                        "iFile=", "sFile", "pFile", "oFile="])
-    except getopt.GetoptError:
-        print('test.py -i <inputFile> -s <statsFile> \
-              -p <paramsFile> -o <outputFile>')
-        sys.exit(2)
-    for opt, arg in opts:
-        if opt == '-h':
-            print('test.py -i <inputFile> outputFile -s \
-                  <statsFile> -p <paramsFile> -o <outputFile>')
-            sys.exit()
-        elif opt in ("-i", "--iFile"):
-            inputFile = arg
-        elif opt in ("-s", "--sFile"):
-            statsFile = arg
-        elif opt in ("-p", "--pFile"):
-            paramsFile = arg
-        elif opt in ("-o", "--oFile"):
-            outputFile = arg
-
-    return (inputFile, statsFile, paramsFile, outputFile)
-
-
 def getData(fileName):
-    df = pd.read_csv(fileName, sep=";")
+    df = pd.read_parquet(fileName)
+    # df = pd.read_parquet(fileName, engine='fastparquet')
     return df
 
-
 def buildColorsList(data, cmap):
-    normalize = colors.Normalize(vmax=data.max(), vmin=data.min())
+    normalize = colors.Normalize(vmax=1.0, vmin=0.0)
     colorList = cmap(normalize(data))
 
     return colorList
 
-if __name__ == '__main__':
+def muller_plots(input_file, stats_file, params_file, output_prefix):
 
-    inputFile, statsFile, paramsFile, outputFile = get_args(sys.argv[1:])
-
-    data = getData(inputFile)
-    statsData = getData(statsFile)
-    paramsData = getData(paramsFile)
-    cmap = plt.get_cmap('Blues')
+    data = getData(input_file)
+    statsData = getData(stats_file)
+    paramsData = getData(params_file)
+    cmap = plt.get_cmap('nipy_spectral')
     # cmap = plt.cm.get_cmap('RdYlBu')
 
     params = iter(paramsData.columns.values)
@@ -93,8 +58,10 @@ if __name__ == '__main__':
 
         ax2.set_xticks(ax2Ticks)
         ax2.set_xbound(ax1.get_xbound())
+        ticks = ax2Ticks[(np.where(ax2Ticks.astype(int) <
+                         statsData['systemSize'].values.shape[0]))]
         ax2.set_xticklabels(np.take(statsData['systemSize'].values,
-                            ax2Ticks[0:-1].astype(int), axis=0))
+                            ticks.astype(int), axis=0))
         # plt.xlabel('time [sytem]', fontsize='xx-large')
         ax1.set_ylabel(
             'fractions of cell clons', fontsize='xx-large')
@@ -103,17 +70,19 @@ if __name__ == '__main__':
         ax1.set_xlabel('time [sytem]', fontsize='xx-large')
         ax2.set_xlabel('number of cells in system', fontsize='xx-large')
         sm = plt.cm.ScalarMappable(cmap=cmap,
-                                   norm=plt.Normalize(vmin=stat.min(),
-                                                      vmax=stat.max()))
+                                   norm=plt.Normalize(vmin=0.0,
+                                                      vmax=1.0))
         sm._A = []
         colorbar = plt.colorbar(sm)
         colorbar.set_label(val, size='xx-large')
 
-        outputFienName = outputFile+val+'.png'
+        outputFienName = output_prefix+val+'.png'
         plt.savefig(outputFienName, dpi=150)
         plt.cla()
         plt.clf()
         plt.close(fig)
         # plt.show()
 
-print("That's all.")
+if __name__ == "__main__":
+    fire.Fire(muller_plots)
+    print("That's all.")

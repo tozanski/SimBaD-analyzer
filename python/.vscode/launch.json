@@ -1,0 +1,34 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Current File",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "args" : [
+                       // // mullerPlot's
+                       // "-i", "../test_data/SEED_00001-csv/output_data/muller_data.csv/part-00000-90b5131c-b78a-49a1-8672-8cbdbded1950-c000.csv",
+                       // "-s", "../test_data/SEED_00001-csv/output_data/clone_stats.csv/part-00000-5fa71995-e02e-48d6-b36d-46a91187cb0a-c000.csv",
+                       // "-p", "../test_data/SEED_00001-csv/output_data/large_mutations.csv/part-00000-6bd83c13-6ec7-4320-8bf5-70ff9a7a4e31-c000.csv",
+                       // "-o", "./muller_20190523-013135-726384706-mass_sim_SEED_0001_"\
+
+                       // // MullerPlots histogram - separate files for every parameter
+                        // "-i", "../test_data/SEED_00001-csv/output_data/histogram_birthEfficiency.csv" ,
+                        // "-t", "../test_data/SEED_00001-csv/output_data/timePoints.csv",
+                        // "-s", "../test_data/SEED_00001-csv/output_data/clone_stats.csv/part-00000-5fa71995-e02e-48d6-b36d-46a91187cb0a-c000.csv",
+                        // "-n", "birth Efficiency",
+                        // "-o", "./muller_histogram_20190523-013135-726384706-mass_sim_SEED_0001_"
+                    
+                      // // histogram
+                      "-i", "../test_data/SEED_00001-csv/output_data/final_mutation_freq.csv/part-00000-1672d10b-34dc-4e20-b17e-890a801d5a02-c000.csv",
+                      "-t", "11",
+                      "-o", "histogram_20190523-013135-726384706-mass_sim_SEED_0001_"
+            ]
+        }
+    ]
+}
