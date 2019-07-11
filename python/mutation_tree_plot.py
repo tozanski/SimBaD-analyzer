@@ -28,7 +28,7 @@ def make_visual_style(graph):
     return visual_style
     
 def mutation_tree_plot(data_path, output_path):
-    g, roots = arrow_to_graph(path)
+    g, roots = arrow_to_graph(data_path)
     roots
     g_layout = g.layout_reingold_tilford(root=[int(x) for x in roots])
     visual_style = make_visual_style(g)
