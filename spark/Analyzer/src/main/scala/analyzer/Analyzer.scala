@@ -132,6 +132,7 @@ object Analyzer {
     val cloneSnapshotPath = outputDirectory +"clone_snapshots.parquet"
     val finalSnapshotPath = outputDirectory + "final_snapshot.csv"
     val cloneStatsPath = outputDirectory + "clone_stats.parquet"
+    val cloneStatsPathCSV = outputDirectory + "clones_stats.csv"
     val largeMullerOrderPath = outputDirectory + "large_muller_order.parquet"
     val mullerPlotDataPath = outputDirectory + "muller_data.parquet"
     val finalMutationFrequencyPath = outputDirectory + "final_mutation_freq.parquet"
@@ -145,9 +146,9 @@ object Analyzer {
 
     val cloneSnapshots = Snapshots.computeOrReadCloneSnapshots(cloneSnapshotPath, chronicles, timePoints, partitionByTime = false)
 
-    val cloneStats = CellStats.readOrCompute(cloneSnapshotPath, cloneSnapshots)
+    val cloneStats = CellStats.readOrCompute(cloneStatsPath, cloneSnapshots)
     CellStats.writeHistograms(outputDirectory, cloneStats.map(_.histograms))
-    saveParquet(cloneStatsPath, cloneStats.map(_.scalarStats).toSeq.toDS().toDF())
+    saveCSV(cloneStatsPathCSV, cloneStats.map(_.scalarStats).toSeq.toDS().toDF(), coalesce=true)
 
     /*
     val largeClones: Dataset[(Long, CellParams)] = chronicles.
