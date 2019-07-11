@@ -23,13 +23,14 @@ def arrow_to_graph(path):
     
 def make_visual_style(graph):
     visual_style = {}
-    visual_style["vertex_size"] = 10*np.log2(np.array(graph.vs["type_count"])+1)+1
+    visual_style["vertex_size"] = (np.array(graph.vs["type_count"])+1)**1/4
     visual_style["vertex_label"] = graph.vs["mutationId"]
+    visual_style["margin"] = 64
     return visual_style
     
 def mutation_tree_plot(data_path, output_path):
     g, roots = arrow_to_graph(data_path)
-    roots
+    
     g_layout = g.layout_reingold_tilford(root=[int(x) for x in roots])
     visual_style = make_visual_style(g)
 
