@@ -14,7 +14,7 @@ from matplotlib import colors
 
 def getData(fileName):
     df = pd.read_parquet(fileName)
-    # df = pd.read_parquet(fileName, engine='fastparquet')
+
     return df
 
 def buildColorsList(data, cmap):
