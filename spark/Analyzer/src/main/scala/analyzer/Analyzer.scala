@@ -225,7 +225,7 @@ object Analyzer {
     val largeFinalMutations = Phylogeny.getOrComputeMutationCounts(cloneCountsPath, lineages, finalClones, mutations)
 
     spark.sparkContext.setJobGroup("mutation counts", "save mutation counts")
-    saveParquet(largeFinalMutationsPath, largeFinalMutations.filter(col("mutationCount")>=100000).toDF())
+    saveParquet(largeFinalMutationsPath, largeFinalMutations.filter(col("mutationCount")>=1000).toDF())
 
     finalClones.unpersist()
 
