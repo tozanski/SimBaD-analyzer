@@ -18,28 +18,6 @@ object Analyzer {
     chronicles.agg( max("birthTime") ).head().getDouble(0)
   }
 
-/*  def readTimePoints(spark: SparkSession, path: String ): Seq[Double] ={
-    import spark.implicits._
-
-    val schema = StructType(Array(
-      StructField("timePoint", FloatType, nullable=false)
-    ))
-
-    spark.
-      read.
-      format("csv").
-      option("positiveInf", "inf").
-      option("negativeInf", "-inf").
-      option("header", "false").
-      option("delimiter", ";").
-      option("mode", "DROPMALFORMED").
-      schema(schema).
-      load(path).
-      as[Double].
-      collect().
-      toArray
-  }*/
-
   def readTimePoints(spark: SparkSession, path: String ): Seq[Double] = {
     import spark.implicits._
     spark.read.parquet(path).as[Double].collect()
@@ -132,7 +110,7 @@ object Analyzer {
     val cloneSnapshotPath = outputDirectory +"clone_snapshots.parquet"
     val finalSnapshotPath = outputDirectory + "final_snapshot.csv"
     val cloneStatsPath = outputDirectory + "clone_stats.parquet"
-    val cloneStatsPathCSV = outputDirectory + "clone_stats.csv"
+    val cloneStatsPathCSV = outputDirectory + "clone_stats_scalars.parquet"
     val largeMullerOrderPath = outputDirectory + "large_muller_order.parquet"
     val mullerPlotDataPath = outputDirectory + "muller_data.parquet"
     val finalMutationFrequencyPath = outputDirectory + "final_mutation_freq.parquet"
@@ -148,7 +126,7 @@ object Analyzer {
 
     val cloneStats = CellStats.readOrCompute(cloneStatsPath, cloneSnapshots)
     CellStats.writeHistograms(outputDirectory, cloneStats.map(_.histograms))
-    saveCSV(cloneStatsPathCSV, cloneStats.map(_.scalarStats).toSeq.toDS().toDF(), coalesce=true)
+    saveParquet(cloneStatsPathCSV, cloneStats.map(_.scalarStats).toSeq.toDS().toDF())
 
     /*
     val largeClones: Dataset[(Long, CellParams)] = chronicles.
