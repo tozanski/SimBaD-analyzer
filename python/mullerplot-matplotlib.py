@@ -19,8 +19,8 @@ def getData(fileName):
 
 def buildColorsList(data, cmap):
     #normalize = colors.Normalize(vmax=1.0, vmin=0.0)
-    normalize = colors.Normalize()
-    colorList = cmap(normalize(data))
+    #colorList = cmap(normalize(data))
+    colorList = cmap(data)
 
     return colorList
 
