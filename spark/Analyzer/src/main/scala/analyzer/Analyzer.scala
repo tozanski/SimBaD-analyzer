@@ -132,7 +132,7 @@ object Analyzer {
     val cloneSnapshotPath = outputDirectory +"clone_snapshots.parquet"
     val finalSnapshotPath = outputDirectory + "final_snapshot.csv"
     val cloneStatsPath = outputDirectory + "clone_stats.parquet"
-    val cloneStatsPathCSV = outputDirectory + "clones_stats.csv"
+    val cloneStatsPathCSV = outputDirectory + "clone_stats.csv"
     val largeMullerOrderPath = outputDirectory + "large_muller_order.parquet"
     val mullerPlotDataPath = outputDirectory + "muller_data.parquet"
     val finalMutationFrequencyPath = outputDirectory + "final_mutation_freq.parquet"
