@@ -9,12 +9,6 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib import colors
 
-    def print_help():
-        print('test.py -i <inputFile> -t <timeFile> -s <statsFile> \
-              -n <parameterName> -o <outputFile>')
-
-        elif opt in ("-n", "--pName"):
-            paramName = arg
 def buildColorsList(data, cmap):
     normalize = colors.Normalize(vmax=data.max(), vmin=data.min())
     colorList = cmap(normalize(data))

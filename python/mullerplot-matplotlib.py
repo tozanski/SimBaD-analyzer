@@ -23,10 +23,10 @@ def buildColorsList(data, cmap):
 
     return colorList
 
-def muller_plots(input_file, stats_file, params_file, output_prefix):
+def muller_plots(input_file, stats_csv, params_file, output_prefix):
 
     data = getData(input_file)
-    statsData = getData(stats_file)
+    statsData = getData(stats_csv)
     paramsData = getData(params_file)
     cmap = plt.get_cmap('nipy_spectral')
     # cmap = plt.cm.get_cmap('RdYlBu')
