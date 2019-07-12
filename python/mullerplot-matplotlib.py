@@ -18,8 +18,8 @@ def getData(fileName):
     return df
 
 def buildColorsList(data, cmap):
-    #normalize = colors.Normalize(vmax=1.0, vmin=0.0)
-    #colorList = cmap(normalize(data))
+    normalize = colors.Normalize(vmax=1.0, vmin=0.0)
+    colorList = cmap(normalize(data))
     colorList = cmap(data)
 
     return colorList
@@ -27,7 +27,7 @@ def buildColorsList(data, cmap):
 def muller_plots(input_file, stats_file, params_file, output_prefix):
 
     data = getData(input_file)
-    statsData = pd.read_parquet(stats_file)
+    statsData = getData(stats_file)
     paramsData = getData(params_file)
     cmap = plt.get_cmap('nipy_spectral')
     # cmap = plt.cm.get_cmap('RdYlBu')
