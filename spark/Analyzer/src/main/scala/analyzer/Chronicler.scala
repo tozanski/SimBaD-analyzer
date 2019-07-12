@@ -70,10 +70,10 @@ object Chronicler {
       withColumn("parentId",
         lag("particleId", 1, null)
           over Window.partitionBy("position").orderBy("eventId")).
-      filter(col("eventKind") =!= LIT_REMOVED).
       withColumn("deathTime",
         lead("time", 1, Double.PositiveInfinity)
           over Window.partitionBy("position").orderBy("eventId")).
+      filter(col("eventKind") =!= LIT_REMOVED).
       withColumnRenamed("time","birthTime")
 
     linearChronicles
@@ -131,7 +131,7 @@ object Chronicler {
 
     val linearChronicles = computeLinearChronicles(startingSnapshot(spark), groupedEvents)
     //spark.sparkContext.setJobGroup("linear chronicles", "write linear chronicles")
-    //linearChronicles.write.mode(SaveMode.Overwrite).parquet(pathPrefix+"/linear_chronicles.parquet")
+    linearChronicles.write.mode(SaveMode.Overwrite).parquet(outputPrefix+"/linear_chronicles.parquet")
 
   }
 
@@ -155,7 +155,7 @@ object Chronicler {
 
   def main(args: Array[String]) {
 
-    if (args.length != 1)
+    if (args.length != 2)
       throw new RuntimeException("no prefix path given")
 
     val streamPath = args(0)
@@ -167,8 +167,9 @@ object Chronicler {
 
     spark.sparkContext.setCheckpointDir(outputPrefix + "/checkpoints/")
 
-    //computeOrReadChronicles(spark, pathPrefix)
     writeLinearChronicles(spark, streamPath, outputPrefix)
+    computeOrReadChronicles(spark, streamPath, outputPrefix)
+
     //scala.io.StdIn.readLine()
   }
 }

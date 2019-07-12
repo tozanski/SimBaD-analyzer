@@ -127,23 +127,8 @@ object Analyzer {
     val cloneStats = CellStats.readOrCompute(cloneStatsPath, cloneSnapshots)
     CellStats.writeHistograms(outputDirectory, cloneStats.map(_.histograms))
     saveParquet(cloneStatsScalarsPath, cloneStats.map(_.scalarStats).toSeq.toDS().toDF())
-
-    /*
-    val largeClones: Dataset[(Long, CellParams)] = chronicles.
-      groupBy("mutationId").
-      agg(
-        count(lit(1)).alias("mutationSize"),
-        first(col("cellParams")).alias("cellParams")
-      ).
-      filter( $"mutationSize" > 1000 ).
-      select($"mutationId".as[Long], $"cellParams".as[CellParams]).
-      cache()*/
+    
     val largeClones = Muller.readOrComputeLargeClones(largeClonesPath, chronicles)
-    /*
-    spark.sparkContext.setJobGroup("large clones", "count large clones")
-    println("Large clones count" + largeClones.count())
-    */
-
 
     val mutations = Phylogeny.getOrComputeMutationBranches(outputDirectory, chronicles)
     val lineages = Phylogeny.getOrComputeLineages(
@@ -152,31 +137,7 @@ object Analyzer {
     )
 
     spark.sparkContext.setJobGroup("muller order", "collect muller order for large mutations")
-    val largeMullerOrder = Muller.readOrComputeLargeMullerOrder(largeMullerOrderPath,lineages, largeClones)
-    /*
-    val largeMullerOrder: Array[MutationOrder] = Muller.mullerOrder(
-      lineages.
-        join(broadcast(largeClones.select("mutationId")),"mutationId").
-        as[Ancestry]
-      ).
-      orderBy("ordering").
-      collect()
-    */
-/*
-    spark.sparkContext.setJobGroup("large clones", "save large clones")
-    saveParquet(largeClonesPath,
-      largeClones.join(broadcast(largeMullerOrder.toSeq.toDS()), "mutationId").
-        orderBy("ordering").
-        select(
-          col("mutationId"),
-          col("cellParams.birthEfficiency"),
-          col("cellParams.birthResistance"),
-          col("cellParams.lifespanEfficiency"),
-          col("cellParams.lifespanResistance"),
-          col("cellParams.successEfficiency"),
-          col("cellParams.successResistance")
-        )
-    )*/
+    val largeMullerOrder = Muller.readOrComputeLargeMullerOrder(largeMullerOrderPath, lineages, largeClones)
 
     Muller.writePlotData(mullerPlotDataPath, cloneSnapshots, largeMullerOrder.map(_.mutationId))
 
