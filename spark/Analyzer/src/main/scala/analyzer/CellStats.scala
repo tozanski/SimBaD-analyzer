@@ -38,7 +38,6 @@ object CellStats {
     cloneCount: Long,
     systemSize: Long,
     entropy: Double,
-    normalizedEntropy: Double,
 
     mean_birth_efficiency: Double, mean_birth_resistance: Double,
     mean_lifespan_efficiency: Double, mean_lifespan_resistance: Double,
@@ -65,8 +64,7 @@ object CellStats {
       count(lit(1)).alias("cloneCount"),
       first("systemSize").alias("systemSize"),
       sum(col("probability") * -log2("probability") ).alias("entropy"),
-      (sum(col("probability") * -log2("probability")) / log2(count(lit(1)))).alias("normalizedEntropy"),
-
+      
       weightedAvg(col("cellParams.birthEfficiency"), col("count")).alias("mean_birth_efficiency"),
       weightedAvg(col("cellParams.birthResistance"), col("count")).alias("mean_birth_resistance"),
       weightedAvg(col("cellParams.lifespanEfficiency"), col("count")).alias("mean_lifespan_efficiency"),
