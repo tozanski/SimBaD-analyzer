@@ -9,6 +9,7 @@ import sys
 import fire
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+import pyarrow.parquet as pq
 from matplotlib import colors
 
 
@@ -27,7 +28,7 @@ def muller_plots(input_file, stats_file, params_file, output_prefix):
 
     data = getData(input_file)
     statsData = getData(stats_file)
-    paramsData = getData(params_file)
+    paramsData = pq.read_table(params_file).flatten().to_pandas()
     cmap = plt.get_cmap('nipy_spectral')
     # cmap = plt.cm.get_cmap('RdYlBu')
 
@@ -48,9 +49,13 @@ def muller_plots(input_file, stats_file, params_file, output_prefix):
 
         sp = plt.stackplot(time, dataNorm.T, cmap=cmap, colors=clist)
         ax1 = fig.add_subplot(111)
+        ax1.set_xlim([0.0, time.max()])
+        ax1.set_ylim([0.0, dataNorm.T.max()])
         ax2 = ax1.twiny()
         ax1Ticks = ax1.get_xticks()
         ax2Ticks = ax1Ticks
+        #plt.xlim([0.0, time.max()])
+        #plt.ylim([0.0, dataNorm.T.max()])
 
         def tick_function(X):
             V = X
@@ -77,11 +82,12 @@ def muller_plots(input_file, stats_file, params_file, output_prefix):
         colorbar.set_label(val, size='xx-large')
 
         outputFienName = output_prefix+val+'.png'
-        plt.savefig(outputFienName, dpi=150)
+        plt.savefig(outputFienName, bbox_inches='tight', dpi=150)
+        # plt.show()
         plt.cla()
         plt.clf()
         plt.close(fig)
-        # plt.show()
+        
 
 if __name__ == "__main__":
     fire.Fire(muller_plots)
