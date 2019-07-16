@@ -64,7 +64,7 @@ object CellStats {
       count(lit(1)).alias("cloneCount"),
       first("systemSize").alias("systemSize"),
       sum(col("probability") * -log2("probability") ).alias("entropy"),
-      
+
       weightedAvg(col("cellParams.birthEfficiency"), col("count")).alias("mean_birth_efficiency"),
       weightedAvg(col("cellParams.birthResistance"), col("count")).alias("mean_birth_resistance"),
       weightedAvg(col("cellParams.lifespanEfficiency"), col("count")).alias("mean_lifespan_efficiency"),
@@ -124,11 +124,11 @@ object CellStats {
     import spark.implicits._
 
     try{
-      spark.read.parquet(path).as[CellStats].collect()
+      spark.read.parquet(path).as[CellStats].orderBy("timePoint").collect()
     }catch{
       case _: Exception =>
         write(path, cloneSnapshots)
-        spark.read.parquet(path).as[CellStats].collect()
+        spark.read.parquet(path).as[CellStats].orderBy("timePoint").collect()
     }
   }
 
