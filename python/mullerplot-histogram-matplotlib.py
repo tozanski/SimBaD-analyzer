@@ -14,9 +14,9 @@ def buildColorsList(data, cmap):
     colorList = cmap(normalize(data))
     return colorList
 
-def histogram_plots(input_file, param_name, time_parquet, stats_parquet, output_file):
+def histogram_plots(input_csv_file, param_name, time_parquet, stats_parquet, output_file):
     
-    data = pd.read_csv(input_file, sep=";", header=None)
+    data = pd.read_csv(input_csv_file, sep=";", header=None)
     #data = pd.read_parquet(input_file)
 
     time = pd.read_parquet(time_parquet)
