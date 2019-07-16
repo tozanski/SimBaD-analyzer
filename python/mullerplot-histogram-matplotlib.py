@@ -14,14 +14,16 @@ def buildColorsList(data, cmap):
     colorList = cmap(normalize(data))
     return colorList
 
-def histogram_plots(input_csv, time_parquet, stats_parquet, output_file):
+def histogram_plots(input_file, param_name, time_parquet, stats_parquet, output_file):
     
-    data = pd.read_csv(input_csv, sep=";", header=None)
+    data = pd.read_csv(input_file, sep=";", header=None)
+    #data = pd.read_parquet(input_file)
+
     time = pd.read_parquet(time_parquet)
     statsData = pd.read_parquet(stats_parquet)
 
     time = time.iloc[0:, 0].values
-    time = np.append([0], time, axis=0)
+    # time = np.append([0], time, axis=0)
     sumAll = np.sum(data.iloc[:, :], axis=1)
     dataNorm = data.iloc[:, :].div(sumAll, axis=0).values
 
@@ -34,12 +36,15 @@ def histogram_plots(input_csv, time_parquet, stats_parquet, output_file):
 
     # colors = cmap.colors
     # https://matplotlib.org/3.1.0/tutorials/colors/colormap-manipulation.html
+    # plt.style.use('dark_background')
     colorsIds = np.arange(0, data.shape[1], 1)
     colors = buildColorsList(colorsIds, cmap)
     fig = plt.figure(figsize=(25, 20))
     sp = plt.stackplot(time, dataNorm.T, edgecolor='white', colors=colors)
 
     ax1 = fig.add_subplot(111)
+    ax1.set_xlim([0.0, time.max()])
+    ax1.set_ylim([0.0, dataNorm.T.max()])
     ax2 = ax1.twiny()
     ax1Ticks = ax1.get_xticks()
     ax2Ticks = ax1Ticks
@@ -67,10 +72,9 @@ def histogram_plots(input_csv, time_parquet, stats_parquet, output_file):
                                                   vmax=dataNorm.max()))
     sm._A = []
     colorbar = plt.colorbar(sm)
-    colorbar.set_label(paramName, size='xx-large')
+    colorbar.set_label(param_name, size='xx-large')
 
-    outputFileName = output_file
-    plt.savefig(outputFileName, dpi=150)
+    plt.savefig(output_file, bbox_inches='tight', dpi=150)
     #plt.show()
     plt.cla()
     plt.clf()
