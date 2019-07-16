@@ -124,11 +124,11 @@ object CellStats {
     import spark.implicits._
 
     try{
-      spark.read.parquet(path).as[CellStats].collect()
+      spark.read.parquet(path).as[CellStats].orderBy("timePoint").collect()
     }catch{
       case _: Exception =>
         write(path, cloneSnapshots)
-        spark.read.parquet(path).as[CellStats].collect()
+        spark.read.parquet(path).as[CellStats].orderBy("timePoint").collect()
     }
   }
 
