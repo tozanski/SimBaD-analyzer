@@ -69,8 +69,8 @@ case class WeightedStdDev(childValue: Expression, childCount: Expression) extend
 
   override lazy val evaluateExpression: Expression = {
 
-    If(count === 0.0, Literal.create(null, DoubleType),
-      If(count === 1.0, Double.NaN, sqrt(M2 / Cast(count - 1, varDataType))))
+    If(count === 0, Literal.create(null, DoubleType),
+      If(count === 1, Double.NaN, sqrt(M2 / Cast(count - 1, varDataType))))
     //Literal.create(null, DoubleType)
   }
 }
