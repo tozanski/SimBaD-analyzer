@@ -29,13 +29,13 @@ case class WeightedStdDev(childValue: Expression, childCount: Expression) extend
 
   private lazy val avg = AttributeReference("avg", avgDataType, nullable = false)()
   private lazy val count = AttributeReference("count", countDataType, nullable = false)()
-  private lazy val vari = AttributeReference("vari", varDataType, nullable = false)()
+  private lazy val M2 = AttributeReference("M2", varDataType, nullable = false)()
 
   private lazy val zeroAvg = Cast(Literal(0), avgDataType)
   private lazy val zeroCount = Cast(Literal(0), countDataType)
   private lazy val zeroVar = Cast(Literal(0), varDataType)
 
-  override lazy val aggBufferAttributes = avg :: count :: vari :: Nil
+  override lazy val aggBufferAttributes = avg :: count :: M2 :: Nil
 
   override lazy val initialValues: Seq[Expression] = Seq(
     Literal.create(0.0, avgDataType),
@@ -44,16 +44,17 @@ case class WeightedStdDev(childValue: Expression, childCount: Expression) extend
   )
 
   override lazy val updateExpressions: Seq[Expression] = {
-    val incValue = if (childValue.nullable) coalesce(Cast(childValue, avgDataType), zeroAvg) else  Cast(childValue, avgDataType)
+    val incValue = if (childValue.nullable) coalesce(Cast(childValue, avgDataType), zeroAvg) else Cast(childValue, avgDataType)
     val incCount = if (childCount.nullable) coalesce(childCount, zeroCount) else childCount
 
     val newCount = count + incCount
     val delta = incValue - avg
-    val newAvg = avg + delta * Cast(incCount / newCount, avgDataType)
-    val newVar = vari + delta*delta * count* Cast(incCount / newCount, avgDataType)
+    val updateWeight = Cast(incCount, avgDataType) / Cast(newCount, avgDataType)
+    val newAvg = avg + delta * updateWeight
 
-    newAvg :: newCount :: newVar :: Nil
-    //avg::count::vari::Nil
+    val newM2 = M2 + delta*delta * Cast(count, avgDataType) * updateWeight
+
+    newAvg :: newCount :: newM2 :: Nil
   }
 
   override lazy val mergeExpressions: Seq[Expression] = {
@@ -61,17 +62,15 @@ case class WeightedStdDev(childValue: Expression, childCount: Expression) extend
     val delta = avg.right - avg.left
     val deltaN = If(newCount === 0, 0.0, delta/Cast(newCount, avgDataType))
     val newAvg = avg.left + deltaN * Cast(count.right, avgDataType)
-    val newVari = vari.left + vari.right + delta * deltaN * Cast(count.left * count.right, avgDataType)
+    val newM = M2.left + M2.right + delta * deltaN * Cast(count.left,avgDataType) * Cast(count.right, avgDataType)
 
-    newAvg :: newCount :: newVari :: Nil
-
-    //avg::count::vari::Nil
+    newAvg :: newCount :: newM :: Nil
   }
 
   override lazy val evaluateExpression: Expression = {
 
-    If(count === 0, Literal.create(null, DoubleType),
-      If(count === 1, Double.NaN, sqrt(vari / Cast(count - 1, varDataType))))
+    If(count === 0.0, Literal.create(null, DoubleType),
+      If(count === 1.0, Double.NaN, sqrt(M2 / Cast(count - 1, varDataType))))
     //Literal.create(null, DoubleType)
   }
 }
