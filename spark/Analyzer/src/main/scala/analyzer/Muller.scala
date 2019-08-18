@@ -69,20 +69,20 @@ object Muller{
     }
   }
 
-  def largeClones(chronicles: Dataset[ChronicleEntry]): Dataset[(Long, CellParams)] = {
+  def largeClones(chronicles: Dataset[ChronicleEntry], threshold: Long): Dataset[(Long, CellParams)] = {
     chronicles.
       groupBy("mutationId").
       agg(
         count(lit(1)).alias("mutationSize"),
         first(col("cellParams")).alias("cellParams")
       ).
-      filter( col("mutationSize") > 1000 ).
+      filter( col("mutationSize") > threshold ).
       select(
         col("mutationId").as(Encoders.scalaLong),
         col("cellParams").as(Encoders.product[CellParams])
       )
   }
-  def readOrComputeLargeClones(path: String, chronicles: Dataset[ChronicleEntry]): Dataset[(Long, CellParams)] = {
+  def readOrComputeLargeClones(path: String, chronicles: Dataset[ChronicleEntry], threshold: Long): Dataset[(Long, CellParams)] = {
     val spark = chronicles.sparkSession
     import spark.implicits._
     try{
@@ -90,7 +90,7 @@ object Muller{
     }catch {
       case _: Exception =>
         spark.sparkContext.setJobGroup("large clones", "compute large clones")
-        largeClones(chronicles).write.mode(SaveMode.Overwrite).parquet(path)
+        largeClones(chronicles, threshold).write.mode(SaveMode.Overwrite).parquet(path)
         spark.read.parquet(path).as[(Long, CellParams)]
     }
   }
