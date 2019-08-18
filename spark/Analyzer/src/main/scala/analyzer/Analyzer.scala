@@ -97,6 +97,9 @@ object Analyzer {
     val streamPath = args(0) + "/"
     val outputDirectory = args(1) + "/"
 
+    val cloneSizeThreshold: Long = if(args.length >2) args(2).toLong else 1000
+
+
     val spark = SparkSession.builder.
       appName("SimBaD analyzer").
       getOrCreate()
@@ -128,7 +131,7 @@ object Analyzer {
     CellStats.writeHistograms(outputDirectory, cloneStats.map(_.histograms))
     saveParquet(cloneStatsScalarsPath, cloneStats.map(_.scalarStats).toSeq.toDS().toDF())
     
-    val largeClones = Muller.readOrComputeLargeClones(largeClonesPath, chronicles)
+    val largeClones = Muller.readOrComputeLargeClones(largeClonesPath, chronicles, cloneSizeThreshold)
 
     val mutations = Phylogeny.getOrComputeMutationBranches(outputDirectory, chronicles)
     val lineages = Phylogeny.getOrComputeLineages(
@@ -164,7 +167,7 @@ object Analyzer {
     val largeFinalMutations = Phylogeny.getOrComputeMutationCounts(cloneCountsPath, lineages, finalClones, mutations)
 
     spark.sparkContext.setJobGroup("mutation counts", "save mutation counts")
-    saveParquet(largeFinalMutationsPath, largeFinalMutations.filter(col("mutationCount")>=1000).toDF())
+    saveParquet(largeFinalMutationsPath, largeFinalMutations.filter(col("mutationCount")>=cloneSizeThreshold).toDF())
 
     finalClones.unpersist()
 
