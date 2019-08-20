@@ -18,21 +18,27 @@ def getData(fileName):
 
     return df
 
+
 def buildColorsList(data, cmap):
     normalize = colors.Normalize(vmax=1.0, vmin=0.0)
     colorList = cmap(normalize(data))
 
     return colorList
 
-def muller_plots(input_file, stats_file, params_file, output_prefix):
+
+def muller_plots(input_file, stats_file, params_file, large_muller_order,
+                 output_prefix):
 
     data = getData(input_file)
     statsData = getData(stats_file)
     paramsData = pq.read_table(params_file).flatten().to_pandas()
-    cmap = plt.get_cmap('nipy_spectral')
+    order = getData(large_muller_order)
+    paramsData = order.join(paramsData.set_index("mutationId"),
+                            on="mutationId", how="inner")
+    cmap = plt.get_cmap('nipy_spectral', data.shape[1])
     # cmap = plt.cm.get_cmap('RdYlBu')
 
-    params = iter(paramsData.columns.values)
+    params = iter(paramsData.columns.values[1:,])
     next(params)
     for idx, val in enumerate(params):
         stat = paramsData[val].values
@@ -69,7 +75,7 @@ def muller_plots(input_file, stats_file, params_file, output_prefix):
                             ticks.astype(int), axis=0))
         # plt.xlabel('time [sytem]', fontsize='xx-large')
         ax1.set_ylabel(
-            'fractions of cell clons', fontsize='xx-large')
+            'fractions of cell clones', fontsize='xx-large')
         # plt.xticks(fontsize='xx-large')
         # plt.yticks(fontsize='xx-large')
         ax1.set_xlabel('time [sytem]', fontsize='xx-large')
