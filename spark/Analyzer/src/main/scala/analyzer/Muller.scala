@@ -82,6 +82,7 @@ object Muller{
         col("cellParams").as(Encoders.product[CellParams])
       )
   }
+
   def readOrComputeLargeClones(path: String, chronicles: Dataset[ChronicleEntry], threshold: Long): Dataset[(Long, CellParams)] = {
     val spark = chronicles.sparkSession
     import spark.implicits._
@@ -94,7 +95,6 @@ object Muller{
         spark.read.parquet(path).as[(Long, CellParams)]
     }
   }
-
 
   def mullerData( spark: SparkSession,
                   chronicles: Dataset[ChronicleEntry],
