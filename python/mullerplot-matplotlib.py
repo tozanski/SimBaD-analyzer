@@ -89,6 +89,7 @@ def muller_plots(input_file, stats_file, params_file, large_muller_order,
 
         outputFienName = output_prefix+val+'.png'
         plt.savefig(outputFienName, bbox_inches='tight', dpi=150)
+
         # plt.show()
         plt.cla()
         plt.clf()
