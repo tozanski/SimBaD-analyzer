@@ -121,7 +121,7 @@ object Analyzer {
     val largeFinalMutationsPath = outputDirectory + "large_final_mutations.parquet"
 
     val majorStatsPath = outputDirectory + "major_stats.parquet"
-    val majorStatsScalarsPath = outputDirectory +",major_stats_scalars.parquet"
+    val majorStatsScalarsPath = outputDirectory +"major_stats_scalars.parquet"
 
     val noiseStatsPath = outputDirectory + "noise_stats.parquet"
     val noiseStatsScalarsPath = outputDirectory +"noise_stats_scalars.parquet"

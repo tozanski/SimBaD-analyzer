@@ -83,7 +83,6 @@ object CellStats {
 
   def write(path: String, cloneSnapshots: Dataset[CloneSnapshot]): Array[CellStats] = {
 
-
     cloneSnapshots.sparkSession.sparkContext.setJobGroup("system sizes", "collect system sizes")
     val systemSizes: Map[Double, Long] = cloneSnapshots.
       groupBy("timePoint").
