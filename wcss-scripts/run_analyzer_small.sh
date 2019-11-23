@@ -12,7 +12,7 @@ elif [ ! -f "$JOBDIR/stream.csv.gz" ]; then
   echo "ERROR: directory $JOBDIR does not contain a stream.csv.gz"
   exit 2
 elif [ ! -f "$JOBDIR/SIMULATION_SUCCESS" ]; then
-  echo "ERROR: directory $JOBDIT does not contain SIMULATION_SUCCESS file"
+  echo "ERROR: directory $JOBDIR does not contain SIMULATION_SUCCESS file"
   exit 3
 fi
 
