@@ -120,6 +120,12 @@ object Analyzer {
     val cloneCountsPath = outputDirectory + "clone_counts.parquet"
     val largeFinalMutationsPath = outputDirectory + "large_final_mutations.parquet"
 
+    val majorStatsPath = outputDirectory + "major_stats.parquet"
+    val majorStatsScalarsPath = outputDirectory +"major_stats_scalars.parquet"
+
+    val noiseStatsPath = outputDirectory + "noise_stats.parquet"
+    val noiseStatsScalarsPath = outputDirectory +"noise_stats_scalars.parquet"
+
     val chronicles = Chronicler.
       computeOrReadChronicles(spark, streamPath, outputDirectory)
 
@@ -130,8 +136,6 @@ object Analyzer {
     val cloneStats = CellStats.readOrCompute(cloneStatsPath, cloneSnapshots)
     CellStats.writeHistograms(outputDirectory, cloneStats.map(_.histograms))
     saveParquet(cloneStatsScalarsPath, cloneStats.map(_.scalarStats).toSeq.toDS().toDF())
-    
-    val largeClones = Muller.readOrComputeLargeClones(largeClonesPath, chronicles, cloneSizeThreshold)
 
     val mutations = Phylogeny.getOrComputeMutationBranches(outputDirectory, chronicles)
     val lineages = Phylogeny.getOrComputeLineages(
@@ -140,7 +144,22 @@ object Analyzer {
     )
 
     spark.sparkContext.setJobGroup("muller order", "collect muller order for large mutations")
+
+
+    val largeClones = Muller.readOrComputeLargeClones(largeClonesPath, chronicles, cloneSizeThreshold)
     val largeMullerOrder = Muller.readOrComputeLargeMullerOrder(largeMullerOrderPath, lineages, largeClones)
+
+    val majorClonesBC = spark.sparkContext.broadcast(largeClones.select("mutationId").as[Long].collect().toSet)
+
+    val majorStats = CellStats.readOrCompute(majorStatsPath, cloneSnapshots.filter( x=> majorClonesBC.value.contains(x.mutationId)))
+    CellStats.writeHistograms(outputDirectory+"major_", majorStats.map(_.histograms))
+    saveParquet(majorStatsScalarsPath, majorStats.map(_.scalarStats).toSeq.toDS().toDF)
+
+    val noiseStats = CellStats.readOrCompute(noiseStatsPath, cloneSnapshots.filter( x=> !majorClonesBC.value.contains(x.mutationId)))
+    CellStats.writeHistograms(outputDirectory+"noise_", noiseStats.map(_.histograms))
+    saveParquet(noiseStatsScalarsPath, noiseStats.map(_.scalarStats).toSeq.toDS().toDF)
+
+    majorClonesBC.unpersist()
 
     Muller.writePlotData(mullerPlotDataPath, cloneSnapshots, largeMullerOrder.map(_.mutationId))
 
